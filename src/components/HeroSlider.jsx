@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Navigation, Pagination } from 'swiper/modules';
 import { useTrailerStore } from '../store/trailerStore';
+import SectionHeading from './SectionHeading';
 
 import 'swiper/css';
 import 'swiper/css/navigation';
@@ -159,10 +160,7 @@ export default function HeroSlider({ movies }) {
       {/* 2. Bottom Sliding Posters: Trending List below the Banner */}
       <div className="max-w-7xl mx-auto px-4 py-8 relative">
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-2">
-            <div className="w-1.5 h-6 bg-gold"></div>
-            <span className="text-heading2 text-text-main uppercase font-bold tracking-wider">Trending</span>
-          </div>
+          <SectionHeading uppercase={false}>Trending</SectionHeading>
 
           {/* Thumbnails Navigation Arrows */}
           <div className="flex space-x-2">
@@ -221,8 +219,8 @@ export default function HeroSlider({ movies }) {
 
                   {/* Poster Image */}
                   <div className={`relative aspect-[2/3] w-full rounded-lg overflow-hidden bg-zinc-800 transition-all duration-300 z-10 ${activeIndex === index
-                      ? 'border-2 border-text-sub2 shadow-xl shadow-black/60'
-                      : 'border border-zinc-800'
+                    ? 'border-2 border-text-sub2 shadow-xl shadow-black/60'
+                    : 'border border-zinc-800'
                     }`}>
                     <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
                   </div>

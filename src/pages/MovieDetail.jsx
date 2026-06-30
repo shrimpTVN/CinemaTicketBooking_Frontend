@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getMovieById, getRelatedMovies } from '../services/movieService';
 import MovieCard from '../components/MovieCard';
 import { useTrailerStore } from '../store/trailerStore';
+import SectionHeading from '../components/SectionHeading';
 
 export default function MovieDetail() {
   const { id } = useParams();
@@ -90,13 +91,13 @@ export default function MovieDetail() {
   }, [id]);
 
   const handleShowtimeClick = (format, time) => {
-    navigate('/booking', { 
-      state: { 
+    navigate('/booking', {
+      state: {
         movieId: movie.id,
         showtime: time,
         format: format,
         date: dates[selectedDateIndex]?.dateStr
-      } 
+      }
     });
   };
 
@@ -148,7 +149,7 @@ export default function MovieDetail() {
     return (
       <div className="bg-bg-dark text-text-main min-h-screen flex flex-col items-center justify-center gap-6 px-4">
         <div className="text-heading2 text-cta font-bold text-center">{error || "Không tìm thấy phim"}</div>
-        <button 
+        <button
           onClick={() => navigate('/')}
           className="bg-cta text-text-main text-body3 px-6 py-3 rounded font-bold hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
         >
@@ -188,14 +189,14 @@ export default function MovieDetail() {
     <div className="bg-bg-dark text-text-main min-h-screen pb-16">
       {/* 1. Backdrop Video/Trailer banner */}
       <div className="relative w-full h-[280px] sm:h-[360px] md:h-[440px] bg-zinc-950 flex items-center justify-center overflow-hidden border-b border-[#222222]">
-        <img 
-          src={movie.posterUrl} 
-          alt="" 
-          className="absolute w-full h-full object-cover opacity-20 blur-md scale-105" 
+        <img
+          src={movie.posterUrl}
+          alt=""
+          className="absolute w-full h-full object-cover opacity-20 blur-md scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-transparent to-transparent z-5"></div>
         {/* Play button */}
-        <button 
+        <button
           onClick={() => openTrailer(movie.trailerUrl)}
           className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-cta text-text-main flex items-center justify-center hover:scale-105 transition-transform duration-300 cursor-pointer shadow-2xl z-10"
           aria-label="Xem trailer"
@@ -208,14 +209,14 @@ export default function MovieDetail() {
 
       {/* 2. Main content Layout */}
       <div className="max-w-7xl mx-auto px-4 relative z-10">
-        
+
         {/* 2.1 Movie Overview overlap banner */}
         <div className="flex flex-col sm:flex-row gap-6 md:gap-8 -mt-16 sm:-mt-24 md:-mt-32 items-start text-left mb-12">
           {/* Vertical Movie Poster */}
           <div className="w-44 sm:w-48 md:w-56 aspect-[2/3] rounded-lg overflow-hidden border-4 border-bg-dark bg-zinc-800 shadow-2xl flex-shrink-0">
             <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
           </div>
-          
+
           {/* Details Column next to poster */}
           <div className="flex-grow pt-2 sm:pt-4 md:pt-6">
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -226,15 +227,15 @@ export default function MovieDetail() {
                 Việt Nam
               </span>
             </div>
-            
+
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-main leading-tight mb-3">
               {movie.title}
             </h1>
-            
+
             <p className="text-text-sub2 text-body2 mb-4 font-medium">
               {movie.genre?.join(', ')}
             </p>
-            
+
             {/* Stars rating area */}
             <div className="flex items-center gap-2 mb-4">
               {renderStars(5)}
@@ -245,7 +246,7 @@ export default function MovieDetail() {
                 ({movie.rating > 0 ? '120 lượt đánh giá' : '0 lượt đánh giá'})
               </span>
             </div>
-            
+
             {/* Metadata icons info */}
             <div className="flex items-center gap-6 text-text-sub3 text-body3">
               <span className="flex items-center gap-1.5">
@@ -261,7 +262,7 @@ export default function MovieDetail() {
                 {movie.releaseDate}
               </span>
             </div>
-            
+
             {/* Director & Cast */}
             <div className="mt-4 pt-4 border-t border-zinc-800 space-y-1.5 text-body3">
               <div>
@@ -278,16 +279,13 @@ export default function MovieDetail() {
 
         {/* 2.2 Split content layout columns */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-          
+
           {/* 2.2.1 Left Main info Column */}
           <div className="lg:col-span-3 space-y-12 text-left">
-            
+
             {/* A. Description block */}
             <section>
-              <div className="flex items-center space-x-2 mb-4 border-b border-[#222222] pb-3">
-                <div className="w-1.5 h-6 bg-gold"></div>
-                <h2 className="text-heading2 text-text-main uppercase font-bold tracking-wider">Mô tả</h2>
-              </div>
+              <SectionHeading hasBorder={true} className="mb-4">Mô tả</SectionHeading>
               <p className="text-body2 text-text-sub2 leading-relaxed whitespace-pre-line">
                 {movie.description}
               </p>
@@ -295,11 +293,8 @@ export default function MovieDetail() {
 
             {/* B. Showtimes block */}
             <section>
-              <div className="flex items-center space-x-2 mb-6 border-b border-[#222222] pb-3">
-                <div className="w-1.5 h-6 bg-gold"></div>
-                <h2 className="text-heading2 text-text-main uppercase font-bold tracking-wider">Lịch chiếu</h2>
-              </div>
-              
+              <SectionHeading hasBorder={true} className="mb-6">Lịch chiếu</SectionHeading>
+
               {movie.status === 'coming-soon' ? (
                 <div className="p-8 text-center bg-zinc-900/30 border border-zinc-800 rounded-xl text-text-sub3 text-body2">
                   Phim sắp chiếu hiện chưa có lịch chiếu cụ thể. Vui lòng quay lại sau khi phim chính thức công chiếu.
@@ -312,11 +307,10 @@ export default function MovieDetail() {
                       <button
                         key={day.id}
                         onClick={() => setSelectedDateIndex(idx)}
-                        className={`flex flex-col items-center justify-center min-w-[70px] h-[52px] rounded-lg border transition-all cursor-pointer ${
-                          selectedDateIndex === idx 
-                            ? 'bg-cta border-cta text-text-main' 
+                        className={`flex flex-col items-center justify-center min-w-[70px] h-[52px] rounded-lg border transition-all cursor-pointer ${selectedDateIndex === idx
+                            ? 'bg-cta border-cta text-text-main'
                             : 'border-zinc-800 bg-zinc-900/50 text-text-sub2 hover:border-zinc-700 hover:text-text-main'
-                        }`}
+                          }`}
                       >
                         <span className="text-[12px] font-bold uppercase">{day.dayName}</span>
                         <span className="text-[11px] font-medium mt-0.5 opacity-80">{day.dateStr}</span>
@@ -327,8 +321,8 @@ export default function MovieDetail() {
                   {/* Formats and Showtimes items */}
                   <div className="space-y-4 pt-2">
                     {mockFormats.map((format, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-start justify-between gap-4"
                       >
                         {/* Format Heading Left */}
@@ -336,7 +330,7 @@ export default function MovieDetail() {
                           <h4 className="text-body2 font-bold text-text-main uppercase tracking-wider">{format.name}</h4>
                           <span className="text-[11px] text-text-sub3 block mt-1">{format.price}</span>
                         </div>
-                        
+
                         {/* Times List Grid Right */}
                         <div className="flex flex-wrap gap-3 flex-grow md:justify-end">
                           {format.times.map((time) => (
@@ -358,14 +352,11 @@ export default function MovieDetail() {
 
             {/* C. Review block */}
             <section>
-              <div className="flex items-center space-x-2 mb-6 border-b border-[#222222] pb-3">
-                <div className="w-1.5 h-6 bg-gold"></div>
-                <h2 className="text-heading2 text-text-main uppercase font-bold tracking-wider">Đánh giá</h2>
-              </div>
-              
+              <SectionHeading hasBorder={true} className="mb-6">Đánh giá</SectionHeading>
+
               {/* Review Statistics & Write Form Header Row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                
+
                 {/* Statistics Box Left */}
                 <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-6 flex flex-row items-center gap-6">
                   {/* Big Number */}
@@ -396,7 +387,7 @@ export default function MovieDetail() {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Write Review Card Right */}
                 <form onSubmit={handleAddReview} className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-5 space-y-4">
                   <div className="flex items-center gap-3 justify-between">
@@ -406,8 +397,8 @@ export default function MovieDetail() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                       </div>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Tên của bạn..."
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
@@ -434,7 +425,7 @@ export default function MovieDetail() {
                       ))}
                     </div>
                   </div>
-                  
+
                   {/* Text Input area */}
                   <textarea
                     rows="2"
@@ -445,7 +436,7 @@ export default function MovieDetail() {
                     required
                   ></textarea>
                   <div className="flex justify-end">
-                    <button 
+                    <button
                       type="submit"
                       className="bg-cta hover:bg-cta-light text-text-main text-body3 px-5 py-2 rounded font-bold uppercase transition-colors cursor-pointer"
                     >
@@ -469,11 +460,10 @@ export default function MovieDetail() {
                   <button
                     key={btn.value}
                     onClick={() => setFilterRating(btn.value)}
-                    className={`px-4 py-1.5 rounded-full border text-body3 font-medium transition-all cursor-pointer ${
-                      filterRating === btn.value
+                    className={`px-4 py-1.5 rounded-full border text-body3 font-medium transition-all cursor-pointer ${filterRating === btn.value
                         ? 'bg-gold border-gold text-bg-dark font-bold'
                         : 'border-zinc-800 text-text-sub2 bg-zinc-900/30 hover:border-zinc-700 hover:text-text-main'
-                    }`}
+                      }`}
                   >
                     {btn.label}
                   </button>
@@ -488,8 +478,8 @@ export default function MovieDetail() {
               ) : (
                 <div className="space-y-4">
                   {filteredReviews.map((review) => (
-                    <div 
-                      key={review.id} 
+                    <div
+                      key={review.id}
                       className="border-b border-zinc-800 pb-5"
                     >
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -513,7 +503,7 @@ export default function MovieDetail() {
                       </p>
                     </div>
                   ))}
-                  
+
                   {/* See more reviews */}
                   <div className="pt-4 flex justify-center">
                     <button className="border border-zinc-800 hover:border-zinc-700 text-text-sub2 hover:text-text-main text-body3 px-6 py-2.5 rounded font-medium transition-all cursor-pointer">
@@ -527,11 +517,8 @@ export default function MovieDetail() {
 
           {/* 2.2.2 Right column sidebar: related movies list */}
           <div className="lg:col-span-1 space-y-6 text-left">
-            <div className="flex items-center space-x-2 mb-4 border-b border-[#222222] pb-3">
-              <div className="w-1.5 h-6 bg-gold"></div>
-              <h2 className="text-heading2 text-text-main uppercase font-bold tracking-wider">Phim tương tự</h2>
-            </div>
-            
+            <SectionHeading hasBorder={true} className="mb-4">Phim tương tự</SectionHeading>
+
             <div className="flex flex-col gap-6">
               {relatedMovies.length === 0 ? (
                 <div className="text-text-sub3 text-body3 py-4 text-center">
@@ -544,7 +531,7 @@ export default function MovieDetail() {
               )}
             </div>
           </div>
-          
+
         </div>
       </div>
     </div>

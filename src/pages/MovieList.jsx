@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getNowShowing, getComingSoon } from '../services/movieService';
 import MovieCard from '../components/MovieCard';
+import SectionHeading from '../components/SectionHeading';
 
 // Skeleton Loader for Movie Cards Grid
 const CardSkeleton = () => (
@@ -139,10 +140,7 @@ export default function MovieList() {
 
         {/* 1. Showing Grid Section */}
         <div className="mb-14">
-          <div className="flex items-center space-x-2 mb-6">
-            <div className="w-1.5 h-6 bg-gold"></div>
-            <h2 className="text-heading2 text-text-main uppercase tracking-wider font-bold">Phim Đang Chiếu</h2>
-          </div>
+          <SectionHeading className="mb-6">Phim Đang Chiếu</SectionHeading>
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -163,10 +161,7 @@ export default function MovieList() {
 
         {/* 2. Coming Soon Grid Section */}
         <div>
-          <div className="flex items-center space-x-2 mb-6">
-            <div className="w-1.5 h-6 bg-gold"></div>
-            <h2 className="text-heading2 text-text-main uppercase tracking-wider font-bold">Phim Sắp Chiếu</h2>
-          </div>
+          <SectionHeading className="mb-6">Phim Sắp Chiếu</SectionHeading>
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { getNowShowing, getComingSoon } from '../services/movieService';
 import HeroSlider from '../components/HeroSlider';
 import MovieCard from '../components/MovieCard';
-import { useTrailerStore } from '../store/trailerStore';
+import TabFilter from '../components/TabFilter';
+import SectionHeading from '../components/SectionHeading';
 
 // Skeleton Loader for Hero Banner
 const HeroSkeleton = () => (
@@ -34,7 +35,6 @@ const CardSkeleton = () => (
 
 export default function Home() {
   const navigate = useNavigate();
-  const { openTrailer } = useTrailerStore();
   const [nowShowing, setNowShowing] = useState([]);
   const [comingSoon, setComingSoon] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +115,7 @@ export default function Home() {
     return (
       <div className="bg-bg-dark text-text-main min-h-screen flex flex-col items-center justify-center gap-6 px-4">
         <div className="text-heading2 text-cta font-bold text-center">{error}</div>
-        <button 
+        <button
           onClick={fetchData}
           className="bg-cta text-text-main text-body3 px-6 py-3 rounded font-bold hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
         >
@@ -134,32 +134,20 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 mt-12 text-left">
         {/* Section Title */}
         <div className="flex items-center space-x-2 mb-6 border-b border-[#222222] pb-4">
-          <div className="w-1.5 h-6 bg-gold"></div>
-          <h2 className="text-heading2 text-text-main uppercase tracking-wider font-bold">Phim</h2>
-          
+          <SectionHeading uppercase={false}>Phim</SectionHeading>
+
           {/* Tabs Toggles */}
-          <div className="flex space-x-6 ml-8 text-body2">
-            <button 
-              onClick={() => setActiveTab('now-showing')}
-              className={`pb-4 -mb-4 border-b-2 font-medium transition-all cursor-pointer ${
-                activeTab === 'now-showing' 
-                  ? 'border-cta text-text-main' 
-                  : 'border-transparent text-text-sub2 hover:text-text-main'
-              }`}
-            >
-              Đang chiếu
-            </button>
-            <button 
-              onClick={() => setActiveTab('coming-soon')}
-              className={`pb-4 -mb-4 border-b-2 font-medium transition-all cursor-pointer ${
-                activeTab === 'coming-soon' 
-                  ? 'border-cta text-text-main' 
-                  : 'border-transparent text-text-sub2 hover:text-text-main'
-              }`}
-            >
-              Sắp chiếu
-            </button>
-          </div>
+          <TabFilter
+            tabs={[
+              { id: 'now-showing', label: 'Đang chiếu' },
+              { id: 'coming-soon', label: 'Sắp chiếu' }
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            variant="select"
+            isHeaderTab={true}
+            className="ml-8 text-body2"
+          />
         </div>
 
         {/* Empty State */}
@@ -175,10 +163,10 @@ export default function Home() {
                 <MovieCard key={movie.id} movie={movie} />
               ))}
             </div>
-            
+
             {/* View All Button */}
             <div className="mt-12 flex justify-center">
-              <button 
+              <button
                 onClick={() => navigate('/movies')}
                 className="border border-[#333333] hover:border-cta text-text-sub1 hover:text-cta text-body3 px-8 py-3 rounded font-bold transition-all uppercase cursor-pointer"
               >
@@ -191,25 +179,22 @@ export default function Home() {
 
       {/* 3. Recommended Section */}
       <section className="max-w-7xl mx-auto px-4 mt-16 text-left">
-        <div className="flex items-center space-x-2 mb-6">
-          <div className="w-1.5 h-6 bg-gold"></div>
-          <h2 className="text-heading2 text-text-main uppercase tracking-wider font-bold">Đề xuất cho bạn</h2>
-        </div>
-        
+        <SectionHeading uppercase={false} className="mb-6">Đề xuất cho bạn</SectionHeading>
+
         {activeRecommended && (
           <div className="flex flex-col">
             {/* Featured Banner Card */}
             <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-8 group">
               {/* Vertical Poster on the Left */}
               <div className="relative w-full sm:w-[220px] md:w-[240px] aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center border border-zinc-800">
-                <img 
-                  src={activeRecommended.posterUrl} 
-                  alt={activeRecommended.title} 
-                  className="w-full h-full object-cover opacity-75 group-hover:scale-102 transition-transform duration-500" 
+                <img
+                  src={activeRecommended.posterUrl}
+                  alt={activeRecommended.title}
+                  className="w-full h-full object-cover opacity-75 group-hover:scale-102 transition-transform duration-500"
                 />
                 {/* Play icon overlay */}
-                <button 
-                  onClick={() => openTrailer(activeRecommended.trailerUrl)}
+                <button
+                  onClick={() => window.open(activeRecommended.trailerUrl, '_blank')}
                   className="absolute w-16 h-16 rounded-full bg-cta text-text-main flex items-center justify-center shadow-lg hover:scale-105 transition-transform duration-300 cursor-pointer"
                   aria-label="Xem trailer"
                 >
@@ -218,14 +203,14 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-              
+
               {/* Right Side: Details & Actions */}
               <div className="flex-grow flex flex-col justify-between py-2 text-left pr-0 md:pr-14">
                 <div>
-                  <h3 className="text-[28px] md:text-[36px] font-bold text-text-main leading-tight mb-4">
+                  <h3 className="text-[28px] md:text-[36px] font-bold text-text-main leading-tight mb-4 group-hover:text-cta-light transition-colors">
                     {activeRecommended.title}
                   </h3>
-                  
+
                   {/* Metadata Row matching wireframe details */}
                   <div className="flex flex-wrap items-center gap-4 md:gap-6 mb-4 text-body3">
                     <span className="text-text-sub2 font-medium">{activeRecommended.genre?.join(', ')}</span>
@@ -237,21 +222,21 @@ export default function Home() {
                       {activeRecommended.ageRating}
                     </span>
                   </div>
-                  
+
                   <p className="text-body2 text-text-sub3 leading-relaxed mb-6 line-clamp-4 max-w-2xl">
                     {activeRecommended.description}
                   </p>
                 </div>
-                
+
                 {/* Action Buttons */}
                 <div className="flex space-x-4">
-                  <button 
+                  <button
                     onClick={() => navigate('/booking', { state: { movieId: activeRecommended.id } })}
                     className="bg-cta hover:bg-cta-light text-text-main text-body3 px-6 py-2.5 rounded font-bold uppercase transition-colors cursor-pointer"
                   >
                     Mua vé
                   </button>
-                  <button 
+                  <button
                     onClick={() => navigate(`/movies/${activeRecommended.id}`)}
                     className="border border-zinc-700 text-text-sub2 hover:text-text-main hover:bg-white/5 text-body3 px-6 py-2.5 rounded font-bold uppercase transition-all cursor-pointer"
                   >
@@ -261,7 +246,7 @@ export default function Home() {
               </div>
 
               {/* Slider Next Chevron Indicator (Right Side) */}
-              <button 
+              <button
                 onClick={handleNextRecommendation}
                 className="hidden md:flex absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-zinc-700 items-center justify-center hover:border-cta hover:text-cta transition-colors cursor-pointer text-text-sub1 bg-zinc-900/80 backdrop-blur-xs"
                 aria-label="Đề xuất tiếp theo"
@@ -275,16 +260,16 @@ export default function Home() {
             {/* Bottom mini-previews of other recommended movies */}
             <div className="flex gap-4 mt-6">
               {otherRecommendations.map((movie) => (
-                <div 
+                <div
                   key={movie.id}
                   onClick={() => handleSelectRecommendation(movie)}
                   className="group cursor-pointer flex flex-col"
                 >
-                  <div className="w-24 aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 border border-zinc-800 hover:border-cta-light transition-all duration-300 hover:scale-103">
-                    <img 
-                      src={movie.posterUrl} 
-                      alt={movie.title} 
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                  <div className="w-24 aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 border border-zinc-800 hover:border-white transition-all duration-300 hover:scale-103">
+                    <img
+                      src={movie.posterUrl}
+                      alt={movie.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
                   </div>
@@ -297,59 +282,56 @@ export default function Home() {
 
       {/* 4. News / Sets Section */}
       <section className="max-w-7xl mx-auto px-4 mt-16 text-left">
-        <div className="flex items-center space-x-2 mb-6">
-          <div className="w-1.5 h-6 bg-gold"></div>
-          <h2 className="text-heading2 text-text-main uppercase tracking-wider font-bold">Tin tức</h2>
-        </div>
-        
+        <SectionHeading uppercase={false} className="mb-6">Tin tức</SectionHeading>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Large Article (left column span 2) */}
-          <div 
+          <div
             onClick={() => window.open('https://github.com/vitejs/vite', '_blank')}
-            className="lg:col-span-2 flex flex-col bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden group cursor-pointer"
+            className="lg:col-span-2 flex flex-col md:flex-row bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden group cursor-pointer"
           >
-            <div className="aspect-video w-full overflow-hidden bg-zinc-800 border-b border-zinc-800">
-              <img 
-                src="https://picsum.photos/seed/news-large/800/450" 
-                alt="Main News" 
+            <div className="md:w-1/2 overflow-hidden bg-zinc-800 border-b md:border-b-0 md:border-r border-zinc-800 flex">
+              <img
+                src="https://picsum.photos/seed/cinema-lobby/800/450"
+                alt="Main News"
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
                 loading="lazy"
               />
             </div>
-            <div className="p-6">
-              <h3 className="text-subtitle font-bold text-text-main mb-3 group-hover:text-gold transition-colors">
+            <div className="p-6 md:w-1/2 flex flex-col justify-center">
+              <h3 className="text-subtitle font-bold text-text-main mb-3 group-hover:text-cta transition-colors">
                 Lịch chiếu phim đặc biệt hè 2026: Ưu đãi bùng nổ tại các cụm rạp
               </h3>
-              <p className="text-body2 text-text-sub3">
+              <p className="text-body2 text-text-sub3 leading-relaxed">
                 Đón chào mùa hè rực rỡ với loạt chương trình khuyến mãi mua 1 tặng 1 vé và combo bắp nước siêu tiết kiệm tại tất cả cụm rạp trên cả nước từ ngày 1/7 đến hết ngày 31/8.
               </p>
             </div>
           </div>
 
           {/* Right vertical sidebar articles list */}
-          <div className="flex flex-col justify-start gap-4">
+          <div className="flex flex-col gap-4">
             {[
               {
                 id: 1,
                 title: "Top 5 bộ phim chiếu rạp không thể bỏ lỡ trong tháng này",
                 desc: "Điểm mặt những tác phẩm bom tấn đa thể loại sắp càn quét các phòng vé Việt Nam.",
-                img: "https://picsum.photos/seed/news-1/180/120"
+                img: "https://picsum.photos/seed/movie-popcorn/180/120"
               },
               {
                 id: 2,
                 title: "Hậu trường chưa kể của bom tấn phòng vé 'Mai'",
                 desc: "Những chi tiết thú vị về quá trình quay dựng và những cảnh quay đầy cảm xúc của các diễn viên.",
-                img: "https://picsum.photos/seed/news-2/180/120"
+                img: "https://picsum.photos/seed/movie-camera/180/120"
               },
               {
                 id: 3,
                 title: "Công Tử Bạc Liêu tung teaser đầu tiên hé lộ tạo hình ấn tượng",
                 desc: "Hình ảnh tạo hình sang trọng và phong thái chơi ngông của vị công tử giàu có bậc nhất Nam Kỳ.",
-                img: "https://picsum.photos/seed/news-3/180/120"
+                img: "https://picsum.photos/seed/cinema-projector/180/120"
               }
             ].map((item) => (
-              <div 
-                key={item.id} 
+              <div
+                key={item.id}
                 onClick={() => window.open('https://github.com/vitejs/vite', '_blank')}
                 className="flex gap-4 p-3 rounded-lg border border-transparent hover:border-zinc-800 hover:bg-zinc-900/30 transition-all cursor-pointer group"
               >
@@ -357,7 +339,7 @@ export default function Home() {
                   <img src={item.img} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-body3 font-bold text-text-main line-clamp-2 mb-1 group-hover:text-gold transition-colors">
+                  <h4 className="text-body3 font-bold text-text-main line-clamp-2 mb-1 group-hover:text-cta transition-colors">
                     {item.title}
                   </h4>
                   <p className="text-[11px] text-text-sub3 line-clamp-2 leading-relaxed">

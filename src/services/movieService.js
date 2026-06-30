@@ -1,17 +1,21 @@
-import moviesData from '../mocks/movies.json';
+import { USE_MOCK } from './apiConfig';
+import * as mockService from './movieMockService';
+import * as apiService from './movieApiService';
+
+/**
+ * Lấy toàn bộ danh sách phim (dùng cho admin)
+ * @returns {Promise<Array>}
+ */
+export const getAllMovies = async () => {
+  return USE_MOCK ? mockService.getAllMovies() : apiService.getAllMovies();
+};
 
 /**
  * Lấy danh sách phim đang chiếu (status: "now-showing")
  * @returns {Promise<Array>}
  */
 export const getNowShowing = async () => {
-  return new Promise((resolve) => {
-    // Giả lập độ trễ mạng để dễ thay thế bằng axios sau này
-    setTimeout(() => {
-      const nowShowing = moviesData.filter(movie => movie.status === 'now-showing');
-      resolve(nowShowing);
-    }, 200);
-  });
+  return USE_MOCK ? mockService.getNowShowing() : apiService.getNowShowing();
 };
 
 /**
@@ -19,12 +23,7 @@ export const getNowShowing = async () => {
  * @returns {Promise<Array>}
  */
 export const getComingSoon = async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const comingSoon = moviesData.filter(movie => movie.status === 'coming-soon');
-      resolve(comingSoon);
-    }, 200);
-  });
+  return USE_MOCK ? mockService.getComingSoon() : apiService.getComingSoon();
 };
 
 /**
@@ -33,12 +32,7 @@ export const getComingSoon = async () => {
  * @returns {Promise<Object|null>}
  */
 export const getMovieById = async (id) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const movie = moviesData.find(m => m.id === Number(id));
-      resolve(movie || null);
-    }, 150);
-  });
+  return USE_MOCK ? mockService.getMovieById(id) : apiService.getMovieById(id);
 };
 
 /**
@@ -47,22 +41,33 @@ export const getMovieById = async (id) => {
  * @returns {Promise<Array>}
  */
 export const getRelatedMovies = async (movie) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (!movie) return resolve([]);
-      const related = moviesData.filter(m => 
-        m.id !== movie.id && 
-        m.genre?.some(g => movie.genre?.includes(g))
-      ).slice(0, 3);
-      if (related.length < 3) {
-        const remaining = moviesData.filter(m => 
-          m.id !== movie.id && 
-          !related.some(r => r.id === m.id)
-        );
-        resolve([...related, ...remaining].slice(0, 3));
-      } else {
-        resolve(related);
-      }
-    }, 150);
-  });
+  return USE_MOCK ? mockService.getRelatedMovies(movie) : apiService.getRelatedMovies(movie);
+};
+
+/**
+ * Tạo mới một bộ phim (admin)
+ * @param {Object} movieData
+ * @returns {Promise<Object|null>}
+ */
+export const createMovie = async (movieData) => {
+  return USE_MOCK ? mockService.createMovie(movieData) : apiService.createMovie(movieData);
+};
+
+/**
+ * Cập nhật thông tin một bộ phim (admin)
+ * @param {number|string} id
+ * @param {Object} movieData
+ * @returns {Promise<Object|null>}
+ */
+export const updateMovie = async (id, movieData) => {
+  return USE_MOCK ? mockService.updateMovie(id, movieData) : apiService.updateMovie(id, movieData);
+};
+
+/**
+ * Xóa một bộ phim (admin)
+ * @param {number|string} id
+ * @returns {Promise<boolean>}
+ */
+export const deleteMovie = async (id) => {
+  return USE_MOCK ? mockService.deleteMovie(id) : apiService.deleteMovie(id);
 };
