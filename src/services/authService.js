@@ -6,6 +6,27 @@ import { USE_MOCK } from './apiConfig';
  * @param {Object} credentials - Chứa email và password
  * @returns {Promise<Object>} Trả về { user, token }
  */
+/**
+ * Chuẩn hóa dữ liệu user từ Backend về đúng format Frontend sử dụng
+ */
+const normalizeUser = (user) => {
+  if (!user) return null;
+  return {
+    fullName: user.name || '',
+    email: user.email || '',
+    birthday: user.doB || '',
+    phoneNumber: user.phoneNumber || '',
+    stars: user.point || 0,
+    spending: user.spending || 0,
+    avatar: user.avatar || '',
+  };
+};
+
+/**
+ * Đăng nhập người dùng
+ * @param {Object} credentials - Chứa email và password
+ * @returns {Promise<Object>} Trả về { user, token }
+ */
 export const login = async (credentials) => {
   if (USE_MOCK) {
     // Giả lập cuộc gọi API thành công sau 800ms
@@ -29,13 +50,14 @@ export const login = async (credentials) => {
   }
 
   // Kết nối API thật với Backend
-  // Endpoint mặc định là POST /auth/login hoặc /login tùy thuộc vào Backend của bạn
-  const res = await apiClient.post('/auth/login', credentials);
+  const res = await apiClient.post('/auth/login/public', credentials);
+  const data = res?.data || res;
   
-  // Trả về dữ liệu. Chú ý cấu trúc response từ backend của bạn.
-  // Thông thường backend trả về { user: {...}, token: "..." } hoặc { data: { user, token } }
-  // apiClient interceptor response trả về response.data trực tiếp, nên ta có:
-  return res.data || res;
+  // Trả về định dạng đúng và một token tượng trưng (vì token thật nằm trong HttpOnly Cookie)
+  return {
+    user: normalizeUser(data.user),
+    token: 'cookie-managed-token',
+  };
 };
 
 /**
@@ -63,10 +85,20 @@ export const register = async (userData) => {
   }
 
   // Kết nối API thật với Backend
-  // Endpoint mặc định là POST /auth/register hoặc /register tùy thuộc vào Backend của bạn
-  // Chúng ta gửi các thông tin người dùng đi, loại bỏ trường confirmPassword không cần thiết cho backend
-  const { confirmPassword, ...registerPayload } = userData;
-  const res = await apiClient.post('/auth/register', registerPayload);
+  // Map các trường của Frontend sang định dạng DTO của Backend
+  const registerPayload = {
+    name: userData.fullName,
+    doB: userData.birthday,
+    phoneNumber: userData.phoneNumber,
+    email: userData.email,
+    password: userData.password,
+  };
+
+  await apiClient.post('/auth/register/public', registerPayload);
   
-  return res.data || res;
+  // Sau khi đăng ký thành công, tự động gọi hàm login để thiết lập cookie phiên làm việc
+  return await login({
+    email: userData.email,
+    password: userData.password,
+  });
 };
