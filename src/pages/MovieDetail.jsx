@@ -4,6 +4,7 @@ import { getMovieById, getRelatedMovies } from '../services/movieService';
 import MovieCard from '../components/MovieCard';
 import { useTrailerStore } from '../store/trailerStore';
 import SectionHeading from '../components/SectionHeading';
+import AmbientGlow from '../components/AmbientGlow';
 
 export default function MovieDetail() {
   const { id } = useParams();
@@ -186,7 +187,8 @@ export default function MovieDetail() {
   });
 
   return (
-    <div className="bg-bg-dark text-text-main min-h-screen pb-16">
+    <div className="bg-bg-dark text-text-main min-h-screen pb-16 relative">
+      <AmbientGlow imageUrl={movie.posterUrl} />
       {/* 1. Backdrop Video/Trailer banner */}
       <div className="relative w-full h-[280px] sm:h-[360px] md:h-[440px] bg-zinc-950 flex items-center justify-center overflow-hidden border-b border-[#222222]">
         <img

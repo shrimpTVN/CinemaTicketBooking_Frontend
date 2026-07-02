@@ -12,6 +12,7 @@ import { USE_MOCK } from './apiConfig';
 const normalizeUser = (user) => {
   if (!user) return null;
   return {
+    id: user.id || null,
     fullName: user.name || '',
     email: user.email || '',
     birthday: user.doB || '',
@@ -37,6 +38,7 @@ export const login = async (credentials) => {
 
     return {
       user: {
+        id: 99,
         fullName: displayName || 'Nguyễn Văn A',
         email: credentials.email,
         birthday: '2000-01-01',
@@ -50,7 +52,7 @@ export const login = async (credentials) => {
   }
 
   // Kết nối API thật với Backend
-  const res = await apiClient.post('/auth/login/public', credentials);
+  const res = await apiClient.post('/auth/login', credentials);
   const data = res?.data || res;
   
   // Trả về định dạng đúng và một token tượng trưng (vì token thật nằm trong HttpOnly Cookie)
@@ -72,6 +74,7 @@ export const register = async (userData) => {
 
     return {
       user: {
+        id: 99,
         fullName: userData.fullName || 'Nguyễn Văn A',
         email: userData.email,
         birthday: userData.birthday || '2000-01-01',
@@ -94,11 +97,30 @@ export const register = async (userData) => {
     password: userData.password,
   };
 
-  await apiClient.post('/auth/register/public', registerPayload);
+  await apiClient.post('/auth/register', registerPayload);
   
   // Sau khi đăng ký thành công, tự động gọi hàm login để thiết lập cookie phiên làm việc
   return await login({
     email: userData.email,
     password: userData.password,
+  });
+};
+
+/**
+ * Đổi mật khẩu người dùng
+ * @param {number} userId
+ * @param {string} email
+ * @param {string} oldPassword
+ * @param {string} newPassword
+ */
+export const changePassword = async (userId, email, oldPassword, newPassword) => {
+  if (USE_MOCK) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return;
+  }
+  await apiClient.patch(`/users/${userId}/change-password`, {
+    email,
+    oldPassword,
+    newPassword,
   });
 };

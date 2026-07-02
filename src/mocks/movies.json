@@ -193,96 +193,9 @@
     "director": "Victor Vũ"
   },
   {
-    "id": 13,
-    "title": "Siêu Lừa Gặp Siêu Lầy",
-    "posterUrl": "https://picsum.photos/seed/13/300/450",
-    "genre": [
-      "Hài Hước",
-      "Hành Động"
-    ],
-    "duration": 112,
-    "rating": 7.9,
-    "releaseDate": "2023-03-03",
-    "status": "now-showing",
-    "trailerUrl": "https://www.youtube.com/embed/EX6clvId19s",
-    "description": "Câu chuyện của bộ đôi siêu lừa gặp siêu lầy phối hợp thực hiện các vụ lừa đảo hài hước tại Phú Quốc.",
-    "ageRating": "T16",
-    "cast": [
-      "Anh Tú",
-      "Mạc Văn Khoa",
-      "Nhất Trung"
-    ],
-    "director": "Võ Thanh Hòa"
-  },
-  {
-    "id": 14,
-    "title": "Nhà Không Bán",
-    "posterUrl": "https://picsum.photos/seed/14/300/450",
-    "genre": [
-      "Kinh Dị",
-      "Tâm Lý"
-    ],
-    "duration": 98,
-    "rating": 7.2,
-    "releaseDate": "2022-02-01",
-    "status": "now-showing",
-    "trailerUrl": "https://www.youtube.com/embed/jluSu8Rw6YE",
-    "description": "Những câu chuyện tâm linh bí ẩn xảy ra tại ngôi nhà cổ của gia đình ông Ngà khiến mọi người kinh hãi.",
-    "ageRating": "T18",
-    "cast": [
-      "NSND Kim Xuân",
-      "Minh Hoàng",
-      "Việt Hương"
-    ],
-    "director": "Hoàng Tuấn Cường"
-  },
-  {
-    "id": 15,
-    "title": "Chị Chị Em Em 2",
-    "posterUrl": "https://picsum.photos/seed/15/300/450",
-    "genre": [
-      "Tâm Lý",
-      "Kịch Tính"
-    ],
-    "duration": 115,
-    "rating": 7.6,
-    "releaseDate": "2023-01-22",
-    "status": "now-showing",
-    "trailerUrl": "https://www.youtube.com/embed/nh0BklwPN9Q",
-    "description": "Cuộc chiến tranh giành vị thế đệ nhất mỹ nữ Sài thành xưa giữa Ba Trà và Tư Nhị đầy mưu mô.",
-    "ageRating": "T18",
-    "cast": [
-      "Minh Hằng",
-      "Ngọc Trinh"
-    ],
-    "director": "Vũ Ngọc Đãng"
-  },
-  {
-    "id": 16,
-    "title": "Cô Gái Từ Quá Khứ",
-    "posterUrl": "https://picsum.photos/seed/16/300/450",
-    "genre": [
-      "Tâm Lý",
-      "Kịch Tính",
-      "Kinh Dị"
-    ],
-    "duration": 105,
-    "rating": 7.3,
-    "releaseDate": "2022-10-13",
-    "status": "now-showing",
-    "trailerUrl": "https://www.youtube.com/embed/IosqnBOkk2I",
-    "description": "Cuộc gặp gỡ định mệnh lật lại quá khứ đen tối của đại mỹ nhân Ms. Q đầy bất ngờ.",
-    "ageRating": "T18",
-    "cast": [
-      "Ninh Dương Lan Ngọc",
-      "Kaity Nguyễn"
-    ],
-    "director": "Bảo Nhân, Namcito"
-  },
-  {
     "id": 9,
     "title": "Kính Vạn Hoa",
-    "posterUrl": "https://picsum.photos/seed/9/300/450",
+    "posterUrl": "https://res.cloudinary.com/depaiphq0/image/upload/v1782959342/500-minions_1782791874318_llizmp.webp",
     "genre": [
       "Phiêu Lưu",
       "Gia Đình",
@@ -356,7 +269,7 @@
     "rating": 0.0,
     "releaseDate": "2026-09-15",
     "status": "coming-soon",
-    "trailerUrl": "https://www.youtube.com/embed/IkaP0KJWTsQ",
+    "trailerUrl": "https://www.youtube.com/embed/IikaP0KJWTsQ",
     "description": "Phim lấy cảm hứng từ cuộc đời của Trần Trinh Huy, một vị công tử giàu có bậc nhất Nam Kỳ đầu thế kỷ 20 với những giai thoại ăn chơi nức tiếng.",
     "ageRating": "T16",
     "cast": [
@@ -365,90 +278,5 @@
       "NSƯT Thành Lộc"
     ],
     "director": "Lý Minh Thắng"
-  },
-  {
-    "id": 17,
-    "title": "Linh Miêu",
-    "posterUrl": "https://picsum.photos/seed/17/300/450",
-    "genre": [
-      "Kinh Dị",
-      "Tâm Lý"
-    ],
-    "duration": 110,
-    "rating": 0.0,
-    "releaseDate": "2026-11-20",
-    "status": "coming-soon",
-    "trailerUrl": "https://www.youtube.com/embed/jluSu8Rw6YE",
-    "description": "Tác phẩm kinh dị lấy cảm hứng từ những truyền thuyết dân gian về linh miêu và nghi thức hồi sinh người chết.",
-    "ageRating": "T18",
-    "cast": [
-      "Thùy Tiên",
-      "Hồng Đào"
-    ],
-    "director": "Lưu Thành Art"
-  },
-  {
-    "id": 18,
-    "title": "Thám Tử Kiên",
-    "posterUrl": "https://picsum.photos/seed/18/300/450",
-    "genre": [
-      "Kịch Tính",
-      "Kinh Dị"
-    ],
-    "duration": 108,
-    "rating": 0.0,
-    "releaseDate": "2026-08-30",
-    "status": "coming-soon",
-    "trailerUrl": "https://www.youtube.com/embed/nh0BklwPN9Q",
-    "description": "Hành trình phá án ly kỳ và rùng rợn của thám tử Kiên trước những vụ án mạng bí hiểm.",
-    "ageRating": "T18",
-    "cast": [
-      "Quốc Huy",
-      "Khả Như"
-    ],
-    "director": "Trần Hữu Tấn"
-  },
-  {
-    "id": 19,
-    "title": "Con Cám",
-    "posterUrl": "https://picsum.photos/seed/19/300/450",
-    "genre": [
-      "Kinh Dị",
-      "Cổ Tích"
-    ],
-    "duration": 122,
-    "rating": 0.0,
-    "releaseDate": "2026-09-30",
-    "status": "coming-soon",
-    "trailerUrl": "https://www.youtube.com/embed/IosqnBOkk2I",
-    "description": "Dị bản kinh dị lấy cảm hứng từ câu chuyện cổ tích Tấm Cám quen thuộc của người Việt.",
-    "ageRating": "T18",
-    "cast": [
-      "Rima Thanh Vy",
-      "Lâm Thanh Mỹ"
-    ],
-    "director": "Trần Hữu Tấn"
-  },
-  {
-    "id": 20,
-    "title": "Ngày Xưa Có Một Chuyện Tình",
-    "posterUrl": "https://picsum.photos/seed/20/300/450",
-    "genre": [
-      "Tình Cảm",
-      "Tâm Lý"
-    ],
-    "duration": 116,
-    "rating": 0.0,
-    "releaseDate": "2026-10-10",
-    "status": "coming-soon",
-    "trailerUrl": "https://www.youtube.com/embed/ITlQ0oU7tDA",
-    "description": "Bộ phim chuyển thể ngọt ngào và đầy hoài niệm từ truyện dài của nhà văn Nguyễn Nhật Ánh.",
-    "ageRating": "T13",
-    "cast": [
-      "Avin Lu",
-      "Ngọc Xuân",
-      "Đỗ Nhật Hoàng"
-    ],
-    "director": "Trịnh Đình Lê Minh"
   }
 ]

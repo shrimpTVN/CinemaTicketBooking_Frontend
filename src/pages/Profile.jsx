@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Camera, Trophy, CircleUser, Calendar, Mail, Phone, Lock, Edit3, X, Check, Copy, Info } from 'lucide-react';
 import TabFilter from '../components/TabFilter';
+import HolographicTicket from '../components/HolographicTicket';
+import { changePassword } from '../services/authService';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -12,6 +14,17 @@ export default function Profile() {
 
   // Active Tab: 'info' | 'history' | 'rewards' | 'privacy'
   const [activeTab, setActiveTab] = useState('info');
+  const [localTickets, setLocalTickets] = useState([]);
+  const [selectedTicketForModal, setSelectedTicketForModal] = useState(null);
+
+  useEffect(() => {
+    try {
+      const tickets = JSON.parse(localStorage.getItem('my_cinema_tickets') || '[]');
+      setLocalTickets(tickets);
+    } catch (e) {
+      console.error("Error loading local tickets", e);
+    }
+  }, []);
 
   // Edit Mode for Personal Info
   const [isEditing, setIsEditing] = useState(false);
@@ -185,17 +198,29 @@ export default function Profile() {
   };
 
   // Handle Save Password
-  const handleSavePassword = (e) => {
+  const handleSavePassword = async (e) => {
     e.preventDefault();
     if (validatePassword()) {
-      setIsPasswordModalOpen(false);
-      setPasswordForm({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
-      setPasswordErrors({});
-      showToast('Thay đổi mật khẩu thành công!');
+      try {
+        if (!user || !user.id) {
+          showToast('Không tìm thấy thông tin người dùng! Vui lòng đăng nhập lại.');
+          return;
+        }
+        await changePassword(user.id, user.email, passwordForm.currentPassword, passwordForm.newPassword);
+        setIsPasswordModalOpen(false);
+        setPasswordForm({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+        setPasswordErrors({});
+        showToast('Thay đổi mật khẩu thành công!');
+      } catch (err) {
+        console.error('Error changing password:', err);
+        const errMsg = err.response?.data?.message || err.response?.data || 'Mật khẩu hiện tại không chính xác hoặc có lỗi xảy ra!';
+        setPasswordErrors({ currentPassword: errMsg });
+        showToast(errMsg);
+      }
     }
   };
 
@@ -263,6 +288,58 @@ export default function Profile() {
       ageRating: 'T13',
     }
   ];
+
+  const allTickets = useMemo(() => {
+    const adaptedLocal = localTickets.map(t => ({
+      id: t.ticketCode,
+      title: t.movie.title,
+      poster: t.movie.posterUrl,
+      theater: 'Galaxy Cinema',
+      room: t.showtime.room,
+      date: t.date.dateLabel,
+      time: `${t.showtime.start} ~ ${t.showtime.end || ''}`,
+      seats: t.seats.join(', '),
+      combo: t.combos ? t.combos.join(', ') : 'Không kèm combo',
+      price: t.total,
+      status: 'Thành công',
+      format: t.showtime.format,
+      lang: t.showtime.lang,
+      ageRating: t.movie.ageRating,
+      isLocal: true,
+      rawTicket: t
+    }));
+    return [...adaptedLocal, ...mockTickets];
+  }, [localTickets]);
+
+  const handleTicketClick = (ticket) => {
+    const ticketToView = ticket.isLocal ? ticket.rawTicket : {
+      ticketCode: ticket.id,
+      movie: {
+        title: ticket.title,
+        posterUrl: ticket.poster,
+        ageRating: ticket.ageRating
+      },
+      showtime: {
+        format: ticket.format,
+        lang: ticket.lang,
+        start: ticket.time.split(' ~ ')[0] || ticket.time,
+        room: ticket.room
+      },
+      date: {
+        dateLabel: ticket.date,
+        dayLabel: ''
+      },
+      seats: ticket.seats.split(', ').map(id => ({ id })),
+      total: ticket.price,
+      payment: {
+        name: 'Thanh toán online',
+        bg: '#1a56db',
+        letter: 'C'
+      },
+      combos: ticket.combo && ticket.combo !== 'Không kèm combo' ? [ticket.combo] : []
+    };
+    setSelectedTicketForModal(ticketToView);
+  };
 
   // Mock vouchers data
   const mockVouchers = [
@@ -623,10 +700,11 @@ export default function Profile() {
                 </h3>
                 
                 <div className="flex flex-col gap-5">
-                  {mockTickets.map((ticket, idx) => (
+                  {allTickets.map((ticket, idx) => (
                     <div
                       key={idx}
-                      className="w-full rounded-2xl relative shadow-lg border border-zinc-800 bg-[#1C1C1E] flex flex-col md:flex-row overflow-visible text-left hover:border-white transition-all duration-300 group"
+                      onClick={() => handleTicketClick(ticket)}
+                      className="w-full rounded-2xl relative shadow-lg border border-zinc-850 bg-[#1C1C1E] flex flex-col md:flex-row overflow-visible text-left hover:border-zinc-700/80 transition-all duration-300 group cursor-pointer"
                       style={{ 
                         background: 'linear-gradient(135deg, #1C1C1E 0%, #0F0F10 100%)'
                       }}
@@ -1024,6 +1102,31 @@ export default function Profile() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+      {/* Ticket Detail Modal */}
+      {selectedTicketForModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/85 backdrop-blur-sm cursor-pointer"
+            onClick={() => setSelectedTicketForModal(null)}
+          />
+          {/* Modal Content */}
+          <div className="relative z-10 w-full max-w-2xl transform scale-100 transition-all flex flex-col items-center">
+            {/* Close Button */}
+            <button 
+              onClick={() => setSelectedTicketForModal(null)}
+              className="absolute -top-12 right-2 text-zinc-400 hover:text-white transition-colors bg-zinc-900/60 p-2 rounded-full border border-zinc-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {/* Holographic Interactive Ticket */}
+            <div className="w-full">
+              <HolographicTicket ticket={selectedTicketForModal} />
+            </div>
+            <p className="text-center text-xs text-zinc-500 mt-2 select-none">Di chuyển chuột qua vé để xem hiệu ứng phản quang 3D</p>
           </div>
         </div>
       )}

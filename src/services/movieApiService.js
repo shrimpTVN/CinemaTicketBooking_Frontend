@@ -90,27 +90,27 @@ export const getMovieById = async (id) => {
  */
 export const getRelatedMovies = async (movie) => {
   if (!movie) return [];
-  
+
   try {
     const res = await apiClient.get(`/movies/${movie.id}/related`);
     const movies = Array.isArray(res) ? res : res?.data || [];
     return movies.map(normalizeMovie);
   } catch (error) {
     console.warn('Failed to fetch related movies from API, falling back to local filtering.', error);
-    
+
     try {
       const res = await apiClient.get('/movies');
       const allMovies = Array.isArray(res) ? res : res?.data || [];
       const normalizedMovies = allMovies.map(normalizeMovie);
-      
-      const related = normalizedMovies.filter(m => 
-        m.id !== movie.id && 
+
+      const related = normalizedMovies.filter(m =>
+        m.id !== movie.id &&
         m.genre?.some(g => movie.genre?.includes(g))
       ).slice(0, 3);
-      
+
       if (related.length < 3) {
-        const remaining = normalizedMovies.filter(m => 
-          m.id !== movie.id && 
+        const remaining = normalizedMovies.filter(m =>
+          m.id !== movie.id &&
           !related.some(r => r.id === m.id)
         );
         return [...related, ...remaining].slice(0, 3);
