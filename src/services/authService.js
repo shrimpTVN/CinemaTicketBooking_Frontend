@@ -20,6 +20,7 @@ const normalizeUser = (user) => {
     stars: user.point || 0,
     spending: user.spending || 0,
     avatar: user.avatar || '',
+    role: user.role ? user.role.toUpperCase() : 'USER',
   };
 };
 
@@ -46,6 +47,7 @@ export const login = async (credentials) => {
         stars: 15,
         spending: 4200000,
         avatar: '',
+        role: 'ADMIN',
       },
       token: 'mock-jwt-token-xyz',
     };
@@ -123,4 +125,31 @@ export const changePassword = async (userId, email, oldPassword, newPassword) =>
     oldPassword,
     newPassword,
   });
+};
+
+/**
+ * Cập nhật thông tin cá nhân của người dùng
+ * @param {number} userId
+ * @param {Object} profileData - Chứa fullName, birthday, phoneNumber
+ * @returns {Promise<Object>}
+ */
+export const updateProfile = async (userId, profileData) => {
+  if (USE_MOCK) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return {
+      fullName: profileData.fullName,
+      birthday: profileData.birthday,
+      phoneNumber: profileData.phoneNumber,
+    };
+  }
+
+  const payload = {
+    name: profileData.fullName,
+    doB: profileData.birthday,
+    phoneNumber: profileData.phoneNumber,
+  };
+
+  const res = await apiClient.patch(`/users/${userId}`, payload);
+  const data = res?.data || res;
+  return normalizeUser(data);
 };

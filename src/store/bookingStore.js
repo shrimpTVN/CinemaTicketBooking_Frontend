@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import apiClient from '../services/apiClient';
+import { USE_MOCK } from '../services/apiConfig';
+import { useAuthStore } from './authStore';
 
 /* ═══════════════════════════════════════════════════════════════════════
    ROOM CONFIGURATIONS
@@ -166,7 +169,11 @@ export const useBookingStore = create((set, get) => ({
   layout: {}, // Map của { seatId: { id, row, col, type, status, price } }
   roomConfig: ROOM_CONFIGS['Phòng 1'], // Cấu hình phòng chiếu hiện tại
   selectedSeats: [], // Mảng các đối tượng ghế đang chọn: { id, row, col, type, price }
-  ticketCount: 1, // Số lượng người/vé cần đặt (mặc định là 1)
+  ticketCount: 0, // Số lượng người/vé cần đặt (mặc định là 0)
+  audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 },
+  dbPrices: [],
+  products: [], // Danh sách sản phẩm/combo từ BE
+  paymentMethods: [], // Danh sách phương thức thanh toán từ BE
   
   // Timer States
   holdTimer: 300, // 5 phút (300 giây)
@@ -174,77 +181,390 @@ export const useBookingStore = create((set, get) => ({
 
   // Setters
   setStep: (step) => set({ step }),
-  setMovie: (movie) => set({ movie, showtime: null, date: null, selectedSeats: [], combos: {} }),
+  setMovie: (movie) => set({ movie, showtime: null, date: null, selectedSeats: [], combos: {}, audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 }, ticketCount: 0 }),
   setDate: (date) => set({ date, showtime: null, selectedSeats: [], combos: {} }),
-  setShowtime: (showtime) => {
+  setShowtime: async (showtime) => {
     set({ showtime, selectedSeats: [], combos: {} });
     if (showtime) {
-      get().initLayout();
+      await get().initLayout();
     }
   },
   setPayment: (payment) => set({ payment }),
   setCombos: (combos) => set({ combos }),
-  setTicketCount: (count) => {
+  setTicketCount: async (count) => {
     set({ ticketCount: count });
-    get().initLayout();
+    await get().initLayout();
+  },
+  setAudienceSelection: (selection) => {
+    const ticketCount = Object.values(selection).reduce((sum, count) => sum + count, 0);
+    set({ audienceSelection: selection, ticketCount });
+    
+    // Trim extra selected seats if count decreased
+    const { selectedSeats } = get();
+    if (selectedSeats.length > ticketCount) {
+      const extraSeats = selectedSeats.slice(ticketCount);
+      const user = useAuthStore.getState().user;
+      const userId = user?.id || 1;
+      const showtime = get().showtime;
+      if (extraSeats.length > 0 && showtime && !USE_MOCK) {
+        apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+          seatIds: extraSeats.map(s => s.dbId),
+          userId
+        }).catch(err => console.error("Error releasing trimmed seats:", err));
+      }
+      set({ selectedSeats: selectedSeats.slice(0, ticketCount) });
+    }
+  },
+
+  // Fetch danh sách sản phẩm/combo từ BE (cached)
+  fetchProducts: async () => {
+    const { products } = get();
+    if (products.length > 0) return; // Already cached
+    try {
+      const res = await apiClient.get('/products');
+      const data = res?.data || res || [];
+      if (Array.isArray(data) && data.length > 0) {
+        set({ products: data });
+      }
+    } catch (err) {
+      console.warn('Failed to load products from BE:', err);
+    }
+  },
+
+  // Fetch danh sách phương thức thanh toán từ BE
+  fetchPaymentMethods: async () => {
+    if (USE_MOCK) return;
+    try {
+      const res = await apiClient.get('/payment-methods');
+      const data = res?.data || res || [];
+      if (Array.isArray(data) && data.length > 0) {
+        set({ paymentMethods: data });
+      }
+    } catch (err) {
+      console.warn('Failed to load payment methods from BE:', err);
+    }
+  },
+
+  // Get ticket price for a specific seat type & audience type
+  getSeatPriceForAudience: (seatTypeId, audienceTypeName) => {
+    const { dbPrices, showtime, date } = get();
+    const format = showtime?.format || '2D';
+    
+    let dayCode = 'MON';
+    if (date?.key) {
+      const dateObj = new Date(date.key);
+      const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      dayCode = daysOfWeek[dateObj.getDay()];
+    }
+
+    const typeMapping = { 1: 'normal', 2: 'vip', 3: 'couple' };
+    const type = typeMapping[seatTypeId] || 'normal';
+    const defaultPrices = { normal: 85000, vip: 120000, couple: 90000 };
+
+    if (!Array.isArray(dbPrices) || dbPrices.length === 0) {
+      return defaultPrices[type];
+    }
+
+    const priceItem = dbPrices.find(p => {
+      const p_hall = (p.hallType || '').toUpperCase();
+      const p_seat = (p.seatType || '').toUpperCase();
+      const p_aud = (p.audienceType || '').toUpperCase();
+      
+      const formatMatch = p_hall.includes(format.toUpperCase());
+      const audMatch = p_aud.includes(audienceTypeName.toUpperCase());
+      
+      let seatMatch = false;
+      if (seatTypeId === 1 && (p_seat.includes('THƯỜNG') || p_seat.includes('NORMAL'))) {
+        seatMatch = true;
+      } else if (seatTypeId === 2 && (p_seat.includes('VIP'))) {
+        seatMatch = true;
+      } else if (seatTypeId === 3 && (p_seat.includes('SWEETBOX') || p_seat.includes('COUPLE'))) {
+        seatMatch = true;
+      }
+      
+      const dayMatch = Array.isArray(p.days) && p.days.includes(dayCode);
+      return formatMatch && seatMatch && audMatch && dayMatch;
+    });
+
+    return priceItem ? priceItem.price : defaultPrices[type];
+  },
+
+  // Map selected seats to audience selections sequentially
+  getAssignedSeats: () => {
+    const { selectedSeats, audienceSelection } = get();
+    const assignedTypes = [];
+    Object.entries(audienceSelection).forEach(([type, count]) => {
+      for (let i = 0; i < count; i++) {
+        assignedTypes.push(type);
+      }
+    });
+
+    return selectedSeats.map((seat, index) => {
+      const audienceType = assignedTypes[index] || 'Người lớn';
+      const typeIds = { 'normal': 1, 'vip': 2, 'couple': 3 };
+      const seatTypeId = typeIds[seat.type] || 1;
+      const price = get().getSeatPriceForAudience(seatTypeId, audienceType);
+      
+      return {
+        ...seat,
+        audienceType,
+        price: Number(price)
+      };
+    });
   },
 
   // Khởi tạo sơ đồ ghế
-  initLayout: () => {
-    const { showtime } = get();
+  initLayout: async () => {
+    const { showtime, date } = get();
     const room = showtime?.room || 'Phòng 1';
     const config = ROOM_CONFIGS[room] || ROOM_CONFIGS['Phòng 1'];
     
-    const newLayout = {};
+    let newLayout = {};
+    let roomConfig = config;
+
+    const hallId = showtime?.hallId;
+    if (hallId && showtime?.id && !USE_MOCK) {
+      try {
+        const [seatsRes, showtimeSeatsRes, priceListRes, seatTypesRes] = await Promise.race([
+          Promise.all([
+            apiClient.get(`/halls/${hallId}/seat-map`),
+            apiClient.get(`/showtime-seats/showtimes/${showtime.id}`).catch(err => {
+              console.warn('Failed to load showtime seats status from BE:', err);
+              return [];
+            }),
+            apiClient.get(`/price-lists`).catch(err => {
+              console.warn('Failed to load price lists from BE:', err);
+              return [];
+            }),
+            apiClient.get(`/seat-types`).catch(err => {
+              console.warn('Failed to load seat types from BE:', err);
+              return [];
+            })
+          ]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching seat map')), 1500))
+        ]);
+
+        const dbSeats = seatsRes?.data || seatsRes || [];
+        const dbShowtimeSeats = showtimeSeatsRes?.data || showtimeSeatsRes || [];
+        const dbPrices = priceListRes?.data || priceListRes || [];
+        const seatTypes = seatTypesRes?.data || seatTypesRes || [];
+
+        // Save dbPrices
+        set({ dbPrices });
+
+        if (Array.isArray(dbSeats) && dbSeats.length > 0) {
+          const typeMapping = {
+            1: 'normal',
+            2: 'vip',
+            3: 'couple'
+          };
+
+          // Tìm tất cả ID của loại ghế 'Lối đi' (Walkway)
+          const walkwayTypeIds = Array.isArray(seatTypes) && seatTypes.length > 0
+            ? seatTypes
+                .filter(t => t.name.toLowerCase().includes('lối đi') || t.name.toLowerCase().includes('walkway'))
+                .map(t => t.id)
+            : [5, 9]; // fallback IDs
+
+          // Create a lookup for showtime seat statuses
+          const showtimeSeatStatuses = {};
+          if (Array.isArray(dbShowtimeSeats)) {
+            dbShowtimeSeats.forEach(sts => {
+              showtimeSeatStatuses[sts.seatId] = sts.status;
+            });
+          }
+
+          // Determine dayCode
+          let dayCode = 'MON';
+          if (date?.key) {
+            const dateObj = new Date(date.key);
+            const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            dayCode = daysOfWeek[dateObj.getDay()];
+          }
+          
+          // Lấy danh sách hàng ghế (bỏ qua hàng 'KO' đóng vai trò là lối đi dọc)
+          const uniqueRows = [...new Set(dbSeats.map(s => s.rowLabel).filter(r => r && r !== 'KO'))].sort();
+          
+          // Cấu hình sơ đồ hàng ghế động
+          const dynamicLayout = {};
+          uniqueRows.forEach(row => {
+            // Lọc ra các ghế của hàng này nhưng BỎ QUA ghế là Lối đi
+            const rowSeats = dbSeats.filter(s => s.rowLabel === row && !walkwayTypeIds.includes(s.seatTypeId));
+            const cols = rowSeats.map(s => s.colNumber).sort((a, b) => b - a);
+            // Use the highest seatTypeId across all seats in the row (couple=3 > vip=2 > normal=1)
+            const maxSeatTypeId = Math.max(...rowSeats.map(s => s.seatTypeId || 1));
+            const type = typeMapping[maxSeatTypeId] || 'normal';
+            
+            dynamicLayout[row] = {
+              type,
+              cols
+            };
+          });
+          
+          // Xác định cột là lối đi (cột có rowLabel = 'KO')
+          const walkwayCols = [...new Set(dbSeats.filter(s => s.rowLabel === 'KO').map(s => s.colNumber))];
+          
+          roomConfig = {
+            name: room,
+            rows: uniqueRows,
+            layout: dynamicLayout,
+            aisles: walkwayCols,
+            centerAisle: null,
+            soldSeats: [],
+            heldSeats: []
+          };
+          
+          dbSeats.forEach(s => {
+            // Bỏ qua ghế 'KO' hoặc ghế có loại là Lối đi (Walkway)
+            if (s.rowLabel === 'KO' || walkwayTypeIds.includes(s.seatTypeId)) return;
+            
+            const type = typeMapping[s.seatTypeId] || 'normal';
+            const beStatus = showtimeSeatStatuses[s.id] || s.status;
+            let status = 'available';
+            const statusUpper = (beStatus || '').toUpperCase();
+            if (statusUpper === 'SOLD' || statusUpper === 'OFF' || statusUpper === 'BOOKED') {
+              status = 'booked';
+            } else if (statusUpper === 'HELD') {
+              status = 'held';
+            }
+
+            // Get dynamic price based on "Người lớn" as default display on map
+            const price = get().getSeatPriceForAudience(s.seatTypeId, 'Người lớn');
+            
+            newLayout[s.rowLabel + s.colNumber] = {
+              id: s.rowLabel + s.colNumber,
+              dbId: s.id,
+              row: s.rowLabel,
+              col: s.colNumber,
+              type,
+              status,
+              price: Number(price)
+            };
+          });
+          
+          set({ layout: newLayout, selectedSeats: [], roomConfig });
+          return;
+        }
+      } catch (error) {
+        console.warn(`Không thể tải sơ đồ ghế cho phòng ${hallId} từ cơ sở dữ liệu, sử dụng dữ liệu mock:`, error);
+      }
+    }
+
     const mockHeldSeats = new Set(config.heldSeats);
     const mockSoldSeats = new Set(config.soldSeats);
 
     config.rows.forEach((row) => {
       const cols = config.layout[row].cols;
       const type = config.layout[row].type;
-      cols.forEach((col) => {
-        const id = `${row}${col}`;
-        let status = 'available';
-        if (mockSoldSeats.has(id)) {
-          status = 'booked';
-        } else if (mockHeldSeats.has(id)) {
-          status = 'held';
-        }
-        newLayout[id] = {
-          id,
-          row,
-          col,
-          type,
-          status,
-          price: SEAT_PRICE[type]
-        };
-      });
+      
+      if (type === 'couple') {
+        cols.forEach((col) => {
+          // Even column and its odd partner
+          const evenCol = col % 2 === 0 ? col : col + 1;
+          const oddCol = evenCol - 1;
+          
+          [evenCol, oddCol].forEach((c) => {
+            const id = `${row}${c}`;
+            let status = 'available';
+            if (mockSoldSeats.has(id)) {
+              status = 'booked';
+            } else if (mockHeldSeats.has(id)) {
+              status = 'held';
+            }
+            newLayout[id] = {
+              id,
+              row,
+              col: c,
+              type,
+              status,
+              price: SEAT_PRICE[type]
+            };
+          });
+        });
+      } else {
+        cols.forEach((col) => {
+          const id = `${row}${col}`;
+          let status = 'available';
+          if (mockSoldSeats.has(id)) {
+            status = 'booked';
+          } else if (mockHeldSeats.has(id)) {
+            status = 'held';
+          }
+          newLayout[id] = {
+            id,
+            row,
+            col,
+            type,
+            status,
+            price: SEAT_PRICE[type]
+          };
+        });
+      }
     });
 
     set({ layout: newLayout, selectedSeats: [], roomConfig: config });
   },
 
   // Chọn/bỏ chọn ghế
-  toggleSeat: (row, col, pushToast) => {
-    const { layout, selectedSeats, roomConfig, ticketCount } = get();
+  toggleSeat: async (row, col, pushToast) => {
+    const { layout, selectedSeats, roomConfig, ticketCount, showtime } = get();
     const type = roomConfig.layout[row]?.type || 'normal';
     const id = `${row}${col}`;
     const seat = layout[id];
 
     if (!seat || seat.status === 'booked' || seat.status === 'held') return;
 
+    const isSelected = selectedSeats.some(s => s.id === id);
+    if (!isSelected && selectedSeats.length > 0) {
+      const activeType = selectedSeats[0].type;
+      if (activeType !== seat.type) {
+        const typeNames = { normal: 'Thường', vip: 'VIP', couple: 'Đôi' };
+        pushToast(`Bạn chỉ được chọn các ghế cùng loại ${typeNames[activeType] || activeType}!`, "warning");
+        return;
+      }
+    }
+
+    // get user ID from authStore
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 1;
+
     // Xử lý ghế đôi
     if (type === 'couple') {
-      const partnerCol = col % 2 === 0 ? col - 1 : col + 1;
+      const cols = roomConfig.layout[row]?.cols || [];
+      const sortedCols = [...cols].sort((a, b) => a - b);
+      let partnerCol = null;
+      for (let i = 0; i < sortedCols.length; i += 2) {
+        const c1 = sortedCols[i];
+        const c2 = sortedCols[i+1];
+        if (c1 === col) {
+          partnerCol = c2;
+          break;
+        } else if (c2 === col) {
+          partnerCol = c1;
+          break;
+        }
+      }
+      
       const partnerId = `${row}${partnerCol}`;
       const partner = layout[partnerId];
 
       if (!partner || partner.status === 'booked' || partner.status === 'held') return;
 
-      const isSelected = selectedSeats.some(s => s.id === id);
-
       if (isSelected) {
         // Hủy chọn cả 2
+        if (!USE_MOCK && showtime) {
+          try {
+            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+              seatIds: [seat.dbId, partner.dbId],
+              userId: userId
+            });
+          } catch (error) {
+            console.error("Failed to release seats:", error);
+            pushToast("Không thể giải phóng ghế đôi!", "error");
+            return;
+          }
+        }
+
         const nextSelected = selectedSeats.filter(s => s.id !== id && s.id !== partnerId);
         const nextLayout = { ...layout };
         nextLayout[id] = { ...nextLayout[id], status: 'available' };
@@ -273,10 +593,24 @@ export const useBookingStore = create((set, get) => ({
           }
         }
 
+        // Call backend hold API before setting state
+        if (!USE_MOCK && showtime) {
+          try {
+            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
+              seatIds: [seat.dbId, partner.dbId],
+              userId: userId
+            });
+          } catch (error) {
+            const msg = error.response?.data || error.message || "Không thể giữ ghế";
+            pushToast(typeof msg === 'string' ? msg : "Ghế đã được chọn hoặc giữ bởi người khác!", "error");
+            return;
+          }
+        }
+
         const nextSelected = [
           ...selectedSeats,
-          { id, row, col, type, price: seat.price },
-          { id: partnerId, row, col: partnerCol, type, price: partner.price }
+          { id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId },
+          { id: partnerId, row, col: partnerCol, type: partner.type, price: partner.price, dbId: partner.dbId }
         ];
 
         const nextLayout = { ...layout };
@@ -287,11 +621,23 @@ export const useBookingStore = create((set, get) => ({
       }
     } else {
       // Ghế thường hoặc VIP
-      const isSelected = selectedSeats.some(s => s.id === id);
       const nextLayout = { ...layout };
 
       if (isSelected) {
         // Bỏ chọn
+        if (!USE_MOCK && showtime) {
+          try {
+            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+              seatIds: [seat.dbId],
+              userId: userId
+            });
+          } catch (error) {
+            console.error("Failed to release seat:", error);
+            pushToast("Không thể giải phóng ghế!", "error");
+            return;
+          }
+        }
+
         const nextSelected = selectedSeats.filter(s => s.id !== id);
         nextLayout[id] = { ...nextLayout[id], status: 'available' };
 
@@ -316,7 +662,27 @@ export const useBookingStore = create((set, get) => ({
           }
         }
 
-        const nextSelected = [...selectedSeats, { id, row, col, type, price: seat.price }];
+        // Call backend hold API before setting state
+        if (!USE_MOCK && showtime) {
+          try {
+            console.log(">>> [holdSeats] Calling hold API with:", {
+              showtimeId: showtime.id,
+              seatIds: [seat.dbId],
+              userId: userId
+            });
+            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
+              seatIds: [seat.dbId],
+              userId: userId
+            });
+          } catch (error) {
+            console.error(">>> [holdSeats] Hold API failed:", error);
+            const msg = error.response?.data || error.message || "Không thể giữ ghế";
+            pushToast(typeof msg === 'string' ? msg : "Ghế đã được chọn hoặc giữ bởi người khác!", "error");
+            return;
+          }
+        }
+
+        const nextSelected = [...selectedSeats, { id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId }];
         nextLayout[id] = { ...nextLayout[id], status: 'selected' };
 
         set({ selectedSeats: nextSelected, layout: nextLayout });
@@ -325,8 +691,23 @@ export const useBookingStore = create((set, get) => ({
   },
 
   // Reset rạp
-  resetSelection: () => {
-    const { layout } = get();
+  resetSelection: async () => {
+    const { layout, selectedSeats, showtime } = get();
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 1;
+    
+    if (selectedSeats.length > 0 && showtime && !USE_MOCK) {
+      try {
+        const seatIds = selectedSeats.map(s => s.dbId);
+        await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+          seatIds: seatIds,
+          userId: userId
+        });
+      } catch (error) {
+        console.error("Failed to release seats on reset:", error);
+      }
+    }
+    
     const nextLayout = { ...layout };
     Object.keys(nextLayout).forEach(id => {
       if (nextLayout[id].status === 'selected') {
@@ -339,9 +720,10 @@ export const useBookingStore = create((set, get) => ({
   // Countdown timer giữ ghế
   startHoldTimer: (onExpired) => {
     const { holdIntervalId } = get();
-    if (holdIntervalId) clearInterval(holdIntervalId);
+    // Nếu timer đang chạy rồi thì không reset — chỉ tiếp tục đếm ngược
+    if (holdIntervalId) return;
 
-    set({ holdTimer: 300 }); // Reset về 5 phút
+    set({ holdTimer: 300 }); // Chỉ reset về 5 phút khi bắt đầu phiên mới
 
     const intervalId = setInterval(() => {
       const { holdTimer } = get();
@@ -384,7 +766,9 @@ export const useBookingStore = create((set, get) => ({
       layout: {},
       selectedSeats: [],
       holdTimer: 300,
-      ticketCount: 1
+      ticketCount: 0,
+      audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 },
+      dbPrices: []
     });
   }
 }));

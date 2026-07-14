@@ -29,10 +29,20 @@ const NAV_ITEMS = [
   },
   // ── Placeholder cho các module tương lai ──
   {
+    label: 'Quản lý Phòng chiếu',
+    to: '/admin/halls',
+    end: false,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+      </svg>
+    ),
+  },
+  {
     label: 'Quản lý Suất chiếu',
     to: '/admin/showtimes',
     end: false,
-    disabled: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
         <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -82,6 +92,7 @@ const NAV_ITEMS = [
 const PAGE_TITLES = {
   '/admin': 'Tổng quan',
   '/admin/movies': 'Quản lý Phim',
+  '/admin/halls': 'Quản lý Phòng chiếu',
   '/admin/showtimes': 'Quản lý Suất chiếu',
   '/admin/bookings': 'Quản lý Đặt vé',
   '/admin/users': 'Quản lý Người dùng',

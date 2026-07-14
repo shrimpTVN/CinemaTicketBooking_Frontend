@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getNowShowing, getComingSoon } from '../services/movieService';
+import { getNowShowing, getComingSoon, updateSpecialList } from '../services/movieService';
 import HeroSlider from '../components/HeroSlider';
 import MovieCard from '../components/MovieCard';
 import TabFilter from '../components/TabFilter';
 import SectionHeading from '../components/SectionHeading';
+import AgeRatingTag from '../components/AgeRatingTag';
 
 // Skeleton Loader for Hero Banner
 const HeroSkeleton = () => (
@@ -46,6 +47,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
+      await updateSpecialList();
       const [showingData, soonData] = await Promise.all([
         getNowShowing(),
         getComingSoon()
@@ -157,8 +159,8 @@ export default function Home() {
           </div>
         ) : (
           <div>
-            {/* Movies Grid: Mobile 1, Tablet 2, Desktop 4 columns */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            {/* Movies Grid: Mobile 2 columns, Desktop 4 columns */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {activeMovies.map((movie) => (
                 <MovieCard key={movie.id} movie={movie} />
               ))}
@@ -218,9 +220,7 @@ export default function Home() {
                     <span className="border border-zinc-700 px-3 py-0.5 rounded text-text-sub2 text-[12px] font-bold">
                       {activeRecommended.duration} phút
                     </span>
-                    <span className="border border-zinc-700 px-3 py-0.5 rounded text-cta font-bold">
-                      {activeRecommended.ageRating}
-                    </span>
+                    <AgeRatingTag rating={activeRecommended.ageRating} />
                   </div>
 
                   <p className="text-body2 text-text-sub3 leading-relaxed mb-6 line-clamp-4 max-w-2xl">

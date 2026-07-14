@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { login as apiLogin } from '../services/authService';
 
@@ -60,7 +60,7 @@ export default function Login() {
       p.phase = Math.random() * Math.PI * 2;
       p.swaySpeed = Math.random() * 0.015 + 0.003; // gentler sway
 
-      p.maxAlpha = Math.random() * 0.20 + 0.04; // Very subtle: max 0.24
+      p.maxAlpha = Math.random() * 0.32 + 0.08; // Brighter: max ~0.40
       p.alpha = isInitial ? Math.random() * p.maxAlpha : 0;
       p.fadeSpeed = Math.random() * 0.003 + 0.0008;
       p.growing = true;
@@ -68,7 +68,7 @@ export default function Login() {
     };
 
     // Cinema projector dust: 120 particles, very subtle
-    const particleCount = 120;
+    const particleCount = 200;
     const particles = [];
 
     for (let i = 0; i < particleCount; i++) {
@@ -154,11 +154,11 @@ export default function Login() {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
 
-          ctx.fillStyle = `rgba(255, 252, 240, ${Math.min(0.35, p.alpha * edgeMultiplier * distMultiplier)})`;
+          ctx.fillStyle = `rgba(255, 252, 240, ${Math.min(0.55, p.alpha * edgeMultiplier * distMultiplier)})`;
 
-          // Very faint glow
-          ctx.shadowBlur = p.radius * 1.5;
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.12)';
+          // Brighter glow
+          ctx.shadowBlur = p.radius * 2.5;
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.22)';
           ctx.fill();
         }
       });
@@ -209,6 +209,8 @@ export default function Login() {
   const login = useAuthStore((state) => state.login);
   const [loading, setLoading] = useState(false);
 
+  const location = useLocation();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validate()) {
@@ -231,7 +233,12 @@ export default function Login() {
 
         login(user, token);
         alert('Đăng nhập thành công!');
-        navigate('/');
+        const from = location.state?.from || '/';
+        const bookingState = location.state?.bookingState;
+        if (from === '/booking') {
+          sessionStorage.setItem('booking_redirect_auth', 'true');
+        }
+        navigate(from, { state: bookingState });
       } catch (error) {
         console.error('Login error:', error);
         const message = error.response?.data?.message || error.message || 'Đăng nhập thất bại. Vui lòng thử lại!';
@@ -273,8 +280,8 @@ export default function Login() {
       </div>
 
       {/* Main Glassmorphism Sign In Card Container */}
-      <div className="relative z-20 w-full max-w-[500px] mx-4 my-10">
-        <div className="relative rounded-2xl p-8 register-card">
+      <div className="relative z-20 w-full max-w-[320px] sm:max-w-[500px] mx-4 my-6 sm:my-10">
+        <div className="relative rounded-2xl p-4 sm:p-8 register-card">
           {/* Spotlight glass reflection overlay */}
           <div
             className="absolute inset-0 rounded-2xl pointer-events-none overflow-hidden"
@@ -286,31 +293,31 @@ export default function Login() {
 
           <div className="relative z-10">
             {/* Header */}
-            <div className="mb-8">
-              <h2 className="text-center text-heading1 font-bold text-white tracking-wide">
+            <div className="mb-5 sm:mb-8">
+              <h2 className="text-center text-[22px] sm:text-heading1 font-bold text-white tracking-wide">
                 Đăng nhập
               </h2>
             </div>
 
             {/* Login Form */}
-            <form onSubmit={handleSubmit} className="mt-8">
+            <form onSubmit={handleSubmit} className="mt-4 sm:mt-8">
               {/* Email */}
-              <div className="flex flex-col space-y-2">
-                <label className="text-label-custom text-text-sub1">Email</label>
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-xs sm:text-label-custom text-text-sub1">Email</label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Nhập địa chỉ email của bạn"
-                  className="w-full h-[42px] bg-[#333333]/60 text-white rounded-lg px-4 border border-zinc-700/60 text-body3 placeholder-zinc-500 light-cast-input"
+                  className="w-full h-9 sm:h-[42px] bg-[#333333]/60 text-white rounded-lg px-3 sm:px-4 border border-zinc-700/60 text-xs sm:text-body3 placeholder-zinc-500 light-cast-input"
                 />
-                {errors.email && <span className="text-red-500 text-xs mt-1">{errors.email}</span>}
+                {errors.email && <span className="text-red-500 text-[10px] sm:text-xs mt-0.5">{errors.email}</span>}
               </div>
 
               {/* Password */}
-              <div className="flex flex-col space-y-2 mt-5">
-                <label className="text-label-custom text-text-sub1">Mật khẩu</label>
+              <div className="flex flex-col space-y-1.5 mt-3 sm:mt-5">
+                <label className="text-xs sm:text-label-custom text-text-sub1">Mật khẩu</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -318,7 +325,7 @@ export default function Login() {
                     value={formData.password}
                     onChange={handleChange}
                     placeholder="Nhập mật khẩu của bạn"
-                    className="w-full h-[42px] bg-[#333333]/60 text-white rounded-lg pl-4 pr-10 border border-zinc-700/60 text-body3 placeholder-zinc-500 light-cast-input"
+                    className="w-full h-9 sm:h-[42px] bg-[#333333]/60 text-white rounded-lg pl-3 pr-9 sm:pl-4 sm:pr-10 border border-zinc-700/60 text-xs sm:text-body3 placeholder-zinc-500 light-cast-input"
                   />
                   <button
                     type="button"
@@ -338,19 +345,19 @@ export default function Login() {
                   </button>
                 </div>
                 {/* Forget Password (closer spacing below input) */}
-                <div className="flex justify-end mt-1">
+                <div className="flex justify-end mt-0.5">
                   <Link
                     to="#"
-                    className="text-body3 text-zinc-400 hover:text-white transition-colors"
+                    className="text-[10px] sm:text-body3 text-zinc-400 hover:text-white transition-colors"
                   >
                     Quên mật khẩu?
                   </Link>
                 </div>
-                {errors.password && <span className="text-red-500 text-xs mt-1">{errors.password}</span>}
+                {errors.password && <span className="text-red-500 text-[10px] sm:text-xs mt-0.5">{errors.password}</span>}
               </div>
 
               {errors.api && (
-                <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-lg p-3 mt-4 text-center">
+                <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] sm:text-xs rounded-lg p-2 sm:p-3 mt-3 text-center">
                   {errors.api}
                 </div>
               )}
@@ -359,7 +366,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#CF0F47] hover:bg-[#FF0B55] disabled:bg-[#CF0F47]/50 disabled:cursor-not-allowed text-white py-3 rounded-lg text-body2 font-bold cursor-pointer transition-all duration-300 light-cast-btn select-none mt-8 flex items-center justify-center gap-2"
+                className="w-full bg-[#CF0F47] hover:bg-[#FF0B55] disabled:bg-[#CF0F47]/50 disabled:cursor-not-allowed text-white py-2 sm:py-3 rounded-lg text-xs sm:text-body2 font-bold cursor-pointer transition-all duration-300 light-cast-btn select-none mt-5 sm:mt-8 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -375,18 +382,18 @@ export default function Login() {
               </button>
 
               {/* OR Divider */}
-              <div className="relative flex py-5 items-center">
+              <div className="relative flex py-3 sm:py-5 items-center">
                 <div className="flex-grow border-t border-zinc-700/60"></div>
-                <span className="flex-shrink mx-4 text-[#8A8A8A] text-body3 font-medium uppercase">HOẶC</span>
+                <span className="flex-shrink mx-3 sm:mx-4 text-[#8A8A8A] text-[10px] sm:text-body3 font-medium uppercase">HOẶC</span>
                 <div className="flex-grow border-t border-zinc-700/60"></div>
               </div>
 
               {/* Continue with Google */}
               <button
                 type="button"
-                className="w-full bg-[#333333]/50 hover:bg-[#3f3f3f]/60 text-white py-3 border border-zinc-700/40 rounded-lg text-body2 font-medium flex items-center justify-center gap-3 cursor-pointer light-cast-google select-none"
+                className="w-full bg-[#333333]/50 hover:bg-[#3f3f3f]/60 text-white py-2 sm:py-3 border border-zinc-700/40 rounded-lg text-xs sm:text-body2 font-medium flex items-center justify-center gap-2 sm:gap-3 cursor-pointer light-cast-google select-none"
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h4.01c2.34-2.16 3.69-5.32 3.69-8.75Z" />
                   <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-4.01-3.13c-1.12.75-2.54 1.19-3.95 1.19-3.05 0-5.63-2.06-6.55-4.83H1.31v3.23A12 12 0 0 0 12 24Z" />
                   <path fill="#FBBC05" d="M5.45 14.32a7.14 7.14 0 0 1 0-4.64V6.45H1.31a12 12 0 0 0 0 11.1l4.14-3.23Z" />
@@ -396,9 +403,9 @@ export default function Login() {
               </button>
 
               {/* Link to Register */}
-              <div className="text-center mt-6 text-body3 text-[#C3C3C3] font-normal">
+              <div className="text-center mt-4 sm:mt-6 text-[10px] sm:text-body3 text-[#C3C3C3] font-normal">
                 Bạn chưa có tài khoản?{' '}
-                <Link to="/register" className="text-[#CF0F47] hover:text-[#FF0B55] font-semibold ml-1 transition-colors">
+                <Link to="/register" state={location.state} className="text-[#CF0F47] hover:text-[#FF0B55] font-semibold ml-1 transition-colors">
                   Đăng ký
                 </Link>
               </div>

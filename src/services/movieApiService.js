@@ -1,5 +1,105 @@
 import apiClient from './apiClient';
 
+const FALLBACK_GENRES = [
+  { id: 1, name: 'Hành động', description: '' },
+  { id: 2, name: 'Phiêu lưu', description: '' },
+  { id: 3, name: 'Hài hước', description: '' },
+  { id: 4, name: 'Kinh dị', description: '' },
+  { id: 5, name: 'Lãng mạng', description: '' },
+  { id: 6, name: 'Giả tưởng', description: '' },
+  { id: 7, name: 'Tâm lý', description: '' },
+  { id: 8, name: 'Hoạt hình', description: '' },
+  { id: 9, name: 'Gia đình', description: '' },
+  { id: 10, name: 'Giật gân', description: '' },
+  { id: 11, name: 'Kỳ ảo', description: '' },
+  { id: 12, name: 'Nhạc kịch', description: '' },
+  { id: 13, name: 'Lịch sử', description: '' },
+  { id: 14, name: 'Chiến tranh', description: '' },
+  { id: 15, name: 'Bí ẩn', description: '' },
+  { id: 16, name: 'Tội phạm', description: '' },
+  { id: 17, name: 'Tiểu sử', description: '' },
+  { id: 18, name: 'Tài liệu', description: '' },
+];
+
+/**
+ * Lấy toàn bộ danh sách thể loại từ API
+ * @returns {Promise<Array>}
+ */
+export const getAllGenres = async () => {
+  try {
+    const res = await apiClient.get('/genres');
+    return Array.isArray(res) ? res : res?.data || [];
+  } catch (error) {
+    console.error('getAllGenres API error, using fallback:', error);
+    return FALLBACK_GENRES;
+  }
+};
+
+/**
+ * Chuyển đổi dữ liệu phim từ định dạng Frontend sang định dạng DTO của Backend
+ * @param {Object} movieData 
+ * @param {Array} allGenres 
+ * @returns {Object}
+ */
+const denormalizeMovie = (movieData, allGenres = []) => {
+  const lookupGenres = allGenres.length > 0 ? allGenres : FALLBACK_GENRES;
+
+  const genres = (movieData.genre || []).map(name => {
+    const normalizedName = name.toLowerCase().replace(/\s+/g, '');
+    const matched = lookupGenres.find(g => g.name.toLowerCase().replace(/\s+/g, '') === normalizedName);
+    if (matched) {
+      return { id: matched.id, name: matched.name, description: matched.description || '' };
+    }
+    return null;
+  }).filter(Boolean);
+
+  let ageLimit = 0;
+  if (movieData.ageRating) {
+    if (movieData.ageRating === 'C' || movieData.ageRating === 'T18') {
+      ageLimit = 18;
+    } else {
+      const match = movieData.ageRating.match(/\d+/);
+      if (match) {
+        ageLimit = parseInt(match[0], 10);
+      }
+    }
+  }
+
+  let premiereDate = null;
+  if (movieData.releaseDate) {
+    try {
+      const dateVal = new Date(movieData.releaseDate);
+      if (!isNaN(dateVal.getTime())) {
+        premiereDate = dateVal.toISOString();
+      }
+    } catch (e) {
+      console.warn("Failed to parse releaseDate to premiereDate:", e);
+    }
+  }
+  if (!premiereDate) {
+    premiereDate = new Date().toISOString();
+  }
+
+  let status = movieData.status === 'OFF' ? 'OFF' : 'ON';
+
+  return {
+    id: movieData.id ? Number(movieData.id) : undefined,
+    title: movieData.title,
+    duration: Number(movieData.duration),
+    avatar: movieData.posterUrl,
+    trailer: movieData.trailerUrl,
+    description: movieData.description || '',
+    country: movieData.country || 'Việt Nam',
+    ageLimit,
+    premiereDate,
+    rating: movieData.rating ? Number(movieData.rating) : 0.0,
+    actors: Array.isArray(movieData.cast) ? movieData.cast.join(', ') : (movieData.cast || ''),
+    director: movieData.director || '',
+    status,
+    genres
+  };
+};
+
 /**
  * Chuẩn hóa dữ liệu phim từ Backend API về đúng format mà Frontend đang sử dụng
  * @param {Object} movie 
@@ -8,10 +108,33 @@ import apiClient from './apiClient';
 const normalizeMovie = (movie) => {
   if (!movie) return null;
 
-  // 1. Chuẩn hóa trạng thái (status) từ UPPERCASE/snake_case về lowercase/kebab-case
-  let status = movie.status;
-  if (status) {
-    status = status.toLowerCase().replace('_', '-');
+  // 1. Phân tích ngày chiếu để quyết định Trạng thái (status) động
+  let status = movie.status || 'ON';
+  const now = new Date();
+  let premiereDateObj = null;
+  const pDate = movie.premiereDate || movie.premiere_date || movie.releaseDate;
+  if (pDate) {
+    try {
+      premiereDateObj = new Date(pDate);
+    } catch (e) {
+      console.warn("Failed to parse date for status calculation:", e);
+    }
+  }
+
+  const isMovieActive = (status === 'ON' || status === 'NOW_SHOWING' || status === 'COMING_SOON');
+
+  if (!isMovieActive || status === 'OFF') {
+    status = 'stopped';
+  } else {
+    if (premiereDateObj && !isNaN(premiereDateObj.getTime())) {
+      if (premiereDateObj <= now) {
+        status = 'now-showing';
+      } else {
+        status = 'coming-soon';
+      }
+    } else {
+      status = 'now-showing';
+    }
   }
 
   // 2. Chuẩn hóa danh sách diễn viên (nếu API trả về chuỗi actors thay vì mảng cast)
@@ -26,10 +149,29 @@ const normalizeMovie = (movie) => {
     genre = movie.genres.map(g => typeof g === 'string' ? g : g.name || g.title);
   }
 
+  let ageRating = movie.ageRating;
+  if (movie.ageLimit !== undefined && movie.ageLimit !== null) {
+    ageRating = movie.ageLimit === 0 ? 'P' : 'T' + movie.ageLimit;
+  }
+
+  let releaseDate = movie.releaseDate;
+  if (pDate) {
+    try {
+      const d = new Date(pDate);
+      if (!isNaN(d.getTime())) {
+        releaseDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      }
+    } catch (e) {
+      console.warn("Failed to parse premiereDate:", e);
+    }
+  }
+
   return {
     ...movie,
     posterUrl: movie.avatar || movie.posterUrl,  // Ánh xạ avatar -> posterUrl
     trailerUrl: movie.trailer || movie.trailerUrl, // Ánh xạ trailer -> trailerUrl
+    releaseDate: releaseDate || movie.releaseDate || 'Đang cập nhật',
+    ageRating,
     status,
     cast,
     genre: genre || [],
@@ -43,7 +185,7 @@ const normalizeMovie = (movie) => {
 export const getNowShowing = async () => {
   try {
     // API có thể trả về trực tiếp mảng hoặc đối tượng chứa mảng
-    const res = await apiClient.get('/movies', { params: { status: 'NOW_SHOWING' } });
+    const res = await apiClient.get('/movies/special-list', { params: { type: 'SHOWING' } });
     const movies = Array.isArray(res) ? res : res?.data || [];
     return movies.map(normalizeMovie);
   } catch (error) {
@@ -58,7 +200,7 @@ export const getNowShowing = async () => {
  */
 export const getComingSoon = async () => {
   try {
-    const res = await apiClient.get('/movies', { params: { status: 'COMING_SOON' } });
+    const res = await apiClient.get('/movies/special-list', { params: { type: 'COMING_SOON' } });
     const movies = Array.isArray(res) ? res : res?.data || [];
     return movies.map(normalizeMovie);
   } catch (error) {
@@ -145,7 +287,9 @@ export const getAllMovies = async () => {
  */
 export const createMovie = async (movieData) => {
   try {
-    const res = await apiClient.post('/movies', movieData);
+    const allGenres = await getAllGenres();
+    const payload = denormalizeMovie(movieData, allGenres);
+    const res = await apiClient.post('/movies', payload);
     return normalizeMovie(res?.data || res);
   } catch (error) {
     console.error('createMovie API error:', error);
@@ -161,7 +305,9 @@ export const createMovie = async (movieData) => {
  */
 export const updateMovie = async (id, movieData) => {
   try {
-    const res = await apiClient.put(`/movies/${id}`, movieData);
+    const allGenres = await getAllGenres();
+    const payload = denormalizeMovie(movieData, allGenres);
+    const res = await apiClient.patch(`/movies/${id}`, payload);
     return normalizeMovie(res?.data || res);
   } catch (error) {
     console.error(`updateMovie (${id}) API error:`, error);
@@ -175,11 +321,21 @@ export const updateMovie = async (id, movieData) => {
  * @returns {Promise<boolean>}
  */
 export const deleteMovie = async (id) => {
+  // Backend không hỗ trợ endpoint xóa phim vì liên quan đến lịch chiếu/vé/hóa đơn
+  console.warn(`deleteMovie (${id}) is not supported by the backend API.`);
+  return false;
+};
+
+/**
+ * Gọi API cập nhật danh sách phim đặc biệt (đang chiếu, sắp chiếu)
+ * @returns {Promise<boolean>}
+ */
+export const updateSpecialList = async () => {
   try {
-    await apiClient.delete(`/movies/${id}`);
+    await apiClient.get('/movies/update-special-list');
     return true;
   } catch (error) {
-    console.error(`deleteMovie (${id}) API error:`, error);
+    console.error('Failed to call update-special-list API:', error);
     return false;
   }
 };

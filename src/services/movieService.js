@@ -71,3 +71,19 @@ export const updateMovie = async (id, movieData) => {
 export const deleteMovie = async (id) => {
   return USE_MOCK ? mockService.deleteMovie(id) : apiService.deleteMovie(id);
 };
+
+/**
+ * Gọi API cập nhật danh sách phim đặc biệt (đang chiếu, sắp chiếu)
+ * @returns {Promise<boolean>}
+ */
+export const updateSpecialList = async () => {
+  return USE_MOCK ? true : apiService.updateSpecialList();
+};
+
+/**
+ * Lấy toàn bộ danh sách thể loại
+ * @returns {Promise<Array>}
+ */
+export const getAllGenres = async () => {
+  return USE_MOCK ? mockService.getAllGenres() : apiService.getAllGenres();
+};

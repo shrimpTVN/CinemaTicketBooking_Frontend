@@ -4,10 +4,39 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Navigation, Pagination } from 'swiper/modules';
 import { useTrailerStore } from '../store/trailerStore';
 import SectionHeading from './SectionHeading';
+import AgeRatingTag from './AgeRatingTag';
 
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
+
+// Helper to truncate text at punctuation marks (comma, dot, etc.) to avoid bad cuts
+const truncateDescription = (text, maxLength = 150) => {
+  if (!text || text.length <= maxLength) return text;
+  const truncated = text.substring(0, maxLength);
+  
+  // Tìm vị trí dấu chấm, dấu phẩy, dấu chấm hỏi, chấm than hoặc chấm phẩy cuối cùng
+  const lastPunctuation = Math.max(
+    truncated.lastIndexOf('.'),
+    truncated.lastIndexOf(','),
+    truncated.lastIndexOf('?'),
+    truncated.lastIndexOf('!'),
+    truncated.lastIndexOf(';')
+  );
+  
+  // Chỉ cắt tại dấu câu nếu dấu câu đó không nằm quá gần đầu chuỗi (ví dụ: tối thiểu là 60 ký tự)
+  if (lastPunctuation > 60) {
+    return truncated.substring(0, lastPunctuation).trim() + '...';
+  }
+  
+  // Fallback: cắt tại khoảng trắng cuối cùng
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 0) {
+    return truncated.substring(0, lastSpace) + '...';
+  }
+  
+  return truncated + '...';
+};
 
 export default function HeroSlider({ movies }) {
   const navigate = useNavigate();
@@ -82,23 +111,40 @@ export default function HeroSlider({ movies }) {
         pagination={{ clickable: true }}
         onSwiper={(swiper) => (mainSwiperRef.current = swiper)}
         onSlideChange={handleSlideChange}
-        className="w-full h-[460px] md:h-[520px] hero-swiper"
+        className="w-full h-[56.25vw] md:h-[520px] hero-swiper"
       >
         {sortedFeaturedMovies.map((movie, index) => {
           const videoId = getVideoId(movie.trailerUrl);
           const embedUrl = getEmbedUrl(movie.trailerUrl);
+          // Use maxresdefault (1280×720) for crisp quality; fallback to hqdefault (480×360) on error
+          const youtubeThumbnail = videoId 
+            ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` 
+            : movie.posterUrl;
+          const youtubeThumbnailFallback = videoId
+            ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+            : movie.posterUrl;
 
           return (
             <SwiperSlide key={movie.id} className="relative w-full h-full group">
-              {/* YouTube Video Background */}
-              <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none bg-black">
+              {/* YouTube Video Background (Desktop only) */}
+              <div className="hidden md:block absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none bg-black">
                 <iframe
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-105 opacity-80"
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full md:w-[100vw] md:h-[56.25vw] md:min-h-[100vh] md:min-w-[177.77vh] scale-105 opacity-80"
                   src={`${embedUrl}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&playsinline=1&enablejsapi=1&showinfo=0&rel=0`}
                   title={movie.title}
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 ></iframe>
+              </div>
+
+              {/* YouTube Thumbnail Background (Mobile only) */}
+              <div className="md:hidden absolute inset-0 w-full h-full overflow-hidden bg-black pointer-events-none select-none">
+                <img
+                  src={youtubeThumbnail}
+                  alt=""
+                  onError={(e) => { e.currentTarget.src = youtubeThumbnailFallback; }}
+                  className="w-full h-full object-cover opacity-90 scale-[1.05]"
+                />
               </div>
 
               {/* Clickable trailer background overlay */}
@@ -108,47 +154,68 @@ export default function HeroSlider({ movies }) {
                 title="Click để xem trailer"
               >
                 {/* Dark Overlays for Text Contrast */}
-                <div className="absolute inset-0 bg-gradient-to-r from-bg-dark via-bg-dark/45 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-transparent to-transparent" />
+                <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-bg-dark via-bg-dark/35 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/85 via-bg-dark/20 to-transparent" />
               </div>
 
               {/* Content Overlay */}
-              <div className="max-w-7xl mx-auto px-4 h-full flex items-center relative z-20 pointer-events-none">
-                <div className="max-w-2xl text-left pointer-events-auto">
-                  <h1 className="text-heading1 text-text-main font-bold mb-4 leading-tight">
+              <div className="max-w-7xl mx-auto px-4 h-full flex items-end justify-center pb-3 md:pb-0 md:items-center md:justify-start relative z-20 pointer-events-none w-full">
+                <div className="max-w-2xl text-center md:text-left flex flex-col items-center md:items-start pointer-events-auto">
+                  <h1 className="text-[16px] sm:text-[20px] md:text-[38px] lg:text-heading1 text-text-main font-bold mb-1.5 md:mb-4 leading-tight line-clamp-1">
                     {movie.title}
                   </h1>
 
-                  {/* Metadata Row: Rating, Duration, Age */}
-                  <div className="flex items-center space-x-4 mb-6 text-body2">
-                    <span className="text-gold font-bold">★ {movie.rating}/10</span>
-                    <span className="text-text-sub2">|</span>
-                    <span className="text-text-sub2">{movie.duration} phút</span>
-                    <span className="text-text-sub2">|</span>
+                  {/* Metadata Row: Outlined Capsule Badges (IMDb/Rating, Age, Year, Duration) */}
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 md:gap-3 mb-3 md:mb-6 text-[10px] md:text-body3">
+                    {/* Rating capsule */}
+                    <span className="border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 rounded text-gold font-bold">
+                      ★ {movie.rating}
+                    </span>
+                    {/* Age rating capsule */}
                     {movie.ageRating && (
-                      <span className="border border-zinc-500 text-text-sub2 text-body3 px-2 py-0.5 rounded font-bold uppercase">
-                        {movie.ageRating}
-                      </span>
+                      <AgeRatingTag rating={movie.ageRating} variant="hero" className="border-zinc-700 bg-zinc-900/60 px-2" />
                     )}
+                    {/* Duration capsule */}
+                    <span className="border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 rounded text-text-sub2 font-bold">
+                      {movie.duration} phút
+                    </span>
                   </div>
 
-                  <p className="text-body2 text-text-sub2 mb-8 line-clamp-3 leading-relaxed">
-                    {movie.description}
+                  <p className="hidden md:line-clamp-2 text-body2 text-text-sub2 mb-6 leading-relaxed">
+                    {truncateDescription(movie.description, 150)}
                   </p>
 
-                  <div className="flex space-x-4">
+                  <div className="flex items-center space-x-3">
                     <button
                       onClick={() => handleBooking(movie.id)}
-                      className="bg-cta text-text-main text-body3 px-6 py-3 rounded font-bold hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
+                      className="bg-cta text-text-main text-[11px] sm:text-body3 px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded font-bold hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
                     >
                       Mua vé
                     </button>
                     <button
                       onClick={() => navigate(`/movies/${movie.id}`)}
-                      className="border border-zinc-500 text-text-sub2 text-body3 px-6 py-3 rounded font-bold hover:bg-white hover:text-text-main hover:bg-white/5 transition-all uppercase cursor-pointer"
+                      className="border border-zinc-500 text-text-sub2 text-[11px] sm:text-body3 px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded font-bold hover:bg-white hover:text-text-main hover:bg-white/5 transition-all uppercase cursor-pointer"
                     >
                       Chi tiết
                     </button>
+                    {/* Play Button next to Chi tiết */}
+                    {videoId && (
+                      <button
+                        onClick={() => openTrailer(movie.trailerUrl)}
+                        className="w-8 h-8 md:w-11 md:h-11 flex items-center justify-center bg-transparent border-none p-0 hover:scale-105 active:scale-95 transition-all cursor-pointer flex-shrink-0"
+                        title="Xem trailer"
+                      >
+                        <svg className="w-full h-full" viewBox="0 0 24 24">
+                          <path
+                            fill="#E4E4E7"
+                            fillRule="evenodd"
+                            clipRule="evenodd"
+                            d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-2.5 7.5l7.5 4.5-7.5 4.5v-9z"
+                            className="hover:fill-white transition-colors"
+                          />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

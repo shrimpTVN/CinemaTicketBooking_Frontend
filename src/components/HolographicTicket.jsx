@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
+import AgeRatingTag from './AgeRatingTag';
 
 export default function HolographicTicket({ ticket }) {
   const cardRef = useRef(null);
@@ -57,7 +58,7 @@ export default function HolographicTicket({ ticket }) {
     if (!seats) return '';
     if (typeof seats === 'string') return seats;
     if (Array.isArray(seats)) {
-      return seats.map(s => typeof s === 'object' ? s.id : s).join(', ');
+      return seats.map(s => typeof s === 'object' ? (s.audienceType ? `${s.id} (${s.audienceType})` : s.id) : s).join(', ');
     }
     return '';
   }, [seats]);
@@ -138,9 +139,7 @@ export default function HolographicTicket({ ticket }) {
                   </>
                 )}
                 {movie?.ageRating && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cta/15 border border-cta/30 text-cta-light uppercase tracking-wide">
-                    {movie.ageRating}
-                  </span>
+                  <AgeRatingTag rating={movie.ageRating} />
                 )}
               </div>
 

@@ -30,50 +30,73 @@
 @utility text-heading1 {
   font-family: var(--font-google-sans);
   font-weight: 500;
-  font-size: 32px;
-  line-height: 1.2;
+  font-size: 20px;
+  line-height: 1.25;
+  @media (min-width: 768px) {
+    font-size: 32px;
+  }
 }
 
 @utility text-heading2 {
   font-family: var(--font-google-sans);
   font-weight: 700;
-  font-size: 24px;
-  line-height: 1.25;
+  font-size: 16px;
+  line-height: 1.3;
+  @media (min-width: 768px) {
+    font-size: 24px;
+    line-height: 1.25;
+  }
 }
 
 @utility text-subtitle {
   font-family: var(--font-google-sans);
   font-weight: 500;
-  font-size: 20px;
-  line-height: 1.3;
+  font-size: 14px;
+  line-height: 1.4;
+  @media (min-width: 768px) {
+    font-size: 20px;
+    line-height: 1.3;
+  }
 }
 
 @utility text-label-custom {
   font-family: var(--font-google-sans);
   font-weight: 500;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.4;
+  @media (min-width: 768px) {
+    font-size: 16px;
+  }
 }
 
 @utility text-body1 {
   font-family: var(--font-google-sans);
   font-weight: 300;
-  font-size: 20px;
+  font-size: 14px;
   line-height: 1.5;
+  @media (min-width: 768px) {
+    font-size: 20px;
+  }
 }
 
 @utility text-body2 {
   font-family: var(--font-google-sans);
   font-weight: 300;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.5;
+  @media (min-width: 768px) {
+    font-size: 16px;
+  }
 }
 
 @utility text-body3 {
   font-family: var(--font-google-sans);
   font-weight: 300;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.6;
+  @media (min-width: 768px) {
+    font-size: 12px;
+  }
 }
 
 /* Base resets */
@@ -101,6 +124,13 @@ body,
   background: var(--color-cta-light) !important;
   width: 24px !important;
   border-radius: 4px !important;
+}
+
+/* Hide pagination dots on mobile for hero banner */
+@media (max-width: 767px) {
+  .hero-swiper .swiper-pagination {
+    display: none !important;
+  }
 }
 
 .swiper-button-next,

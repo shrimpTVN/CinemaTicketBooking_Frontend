@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getNowShowing, getComingSoon } from '../services/movieService';
+import { getNowShowing, getComingSoon, updateSpecialList } from '../services/movieService';
 import MovieCard from '../components/MovieCard';
 import SectionHeading from '../components/SectionHeading';
 
@@ -25,6 +25,7 @@ export default function MovieList() {
     const fetchMovies = async () => {
       try {
         setLoading(true);
+        await updateSpecialList();
         const [showing, soon] = await Promise.all([
           getNowShowing(),
           getComingSoon()
@@ -143,7 +144,7 @@ export default function MovieList() {
           <SectionHeading className="mb-6">Phim Đang Chiếu</SectionHeading>
 
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {[1, 2, 3, 4].map(n => <CardSkeleton key={n} />)}
             </div>
           ) : processedNowShowing.length === 0 ? (
@@ -151,7 +152,7 @@ export default function MovieList() {
               Không tìm thấy phim đang chiếu phù hợp.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {processedNowShowing.map(movie => (
                 <MovieCard key={movie.id} movie={movie} />
               ))}
@@ -164,7 +165,7 @@ export default function MovieList() {
           <SectionHeading className="mb-6">Phim Sắp Chiếu</SectionHeading>
 
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {[1, 2, 3, 4].map(n => <CardSkeleton key={n} />)}
             </div>
           ) : processedComingSoon.length === 0 ? (
@@ -172,7 +173,7 @@ export default function MovieList() {
               Không tìm thấy phim sắp chiếu phù hợp.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {processedComingSoon.map(movie => (
                 <MovieCard key={movie.id} movie={movie} />
               ))}

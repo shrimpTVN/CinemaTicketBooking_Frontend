@@ -20,6 +20,7 @@ const getInitialUser = () => {
       stars: 12,
       spending: 3500000,
       avatar: '',
+      role: 'ADMIN',
     };
   }
   return null;

@@ -127,3 +127,25 @@ export const getRelatedMovies = async (movie) => {
     }, 150);
   });
 };
+
+/**
+ * Lấy toàn bộ danh sách thể loại từ Mock
+ * @returns {Promise<Array>}
+ */
+export const getAllGenres = async () => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve([
+        { id: 1, name: 'Hành động', description: 'Phim hành động' },
+        { id: 2, name: 'Phiêu lưu', description: 'Phim phiêu lưu' },
+        { id: 3, name: 'Hài hước', description: 'Phim hài hước' },
+        { id: 4, name: 'Kinh dị', description: 'Phim kinh dị' },
+        { id: 5, name: 'Lãng mạng', description: 'Phim lãng mạng' },
+        { id: 7, name: 'Tâm lý', description: 'Phim tâm lý' },
+        { id: 9, name: 'Gia đình', description: 'Phim gia đình' },
+        { id: 10, name: 'Giật gân', description: 'Phim giật gân' },
+        { id: 12, name: 'Nhạc kịch', description: 'Phim nhạc kịch' },
+      ]);
+    }, 100);
+  });
+};

@@ -2,18 +2,21 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import MainLayout from './layouts/MainLayout';
 import AdminLayout from './layouts/AdminLayout';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const Home = lazy(() => import('./pages/Home'));
 const MovieList = lazy(() => import('./pages/MovieList'));
-const MovieDetail = lazy(() => import('./pages/MovieDetail'));
-const Booking = lazy(() => import('./pages/Booking'));
-const Register = lazy(() => import('./pages/Register'));
+const MovieDetail = lazy(() => import('./pages/MovieDetail/index.jsx'));
+const Booking = lazy(() => import('./pages/Booking/index.jsx'));
+const Register = lazy(() => import('./pages/Register/index.jsx'));
 const Login = lazy(() => import('./pages/Login'));
-const Profile = lazy(() => import('./pages/Profile'));
+const Profile = lazy(() => import('./pages/Profile/index.jsx'));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const AdminMovies = lazy(() => import('./pages/admin/AdminMovies'));
+const AdminMovies = lazy(() => import('./pages/admin/AdminMovies/index.jsx'));
+const AdminHalls = lazy(() => import('./pages/admin/AdminHalls/index.jsx'));
+const AdminShowtimes = lazy(() => import('./pages/admin/AdminShowtimes/index.jsx'));
 
 // Hall page
 const Hall = lazy(() => import('./pages/Hall'));
@@ -77,9 +80,11 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
 
           {/* ── Admin routes ───────────────────────────── */}
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
             <Route path="movies" element={<AdminMovies />} />
+            <Route path="halls" element={<AdminHalls />} />
+            <Route path="showtimes" element={<AdminShowtimes />} />
           </Route>
         </Routes>
       </Suspense>

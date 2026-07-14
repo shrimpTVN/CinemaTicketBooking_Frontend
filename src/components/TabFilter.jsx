@@ -14,7 +14,7 @@ export default function TabFilter({
   const wrapperClass = isHeaderTab
     ? `flex space-x-6 ${className}`
     : `flex border-b border-zinc-800/80 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none gap-6 md:gap-8 px-2 ${
-        centered ? 'justify-center' : ''
+        centered ? 'md:justify-center' : ''
       } ${className}`;
 
   const buttonClass = isHeaderTab

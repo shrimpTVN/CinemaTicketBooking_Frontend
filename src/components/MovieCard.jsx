@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTrailerStore } from '../store/trailerStore';
+import AgeRatingTag from './AgeRatingTag';
 
 export default function MovieCard({ movie }) {
   const navigate = useNavigate();
@@ -34,9 +35,7 @@ export default function MovieCard({ movie }) {
 
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
           {movie.ageRating && (
-            <span className="w-10 h-6 bg-cta text-text-main text-[11px] rounded font-bold uppercase tracking-wider select-none flex items-center justify-center">
-              {movie.ageRating}
-            </span>
+            <AgeRatingTag rating={movie.ageRating} />
           )}
           {movie.rating && (
             <span className="w-10 h-6 bg-zinc-900/90 text-gold text-[11px] rounded font-bold backdrop-blur-xs select-none flex items-center justify-center gap-0.5">
