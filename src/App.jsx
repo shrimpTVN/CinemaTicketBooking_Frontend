@@ -3,6 +3,7 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 import MainLayout from './layouts/MainLayout';
 import AdminLayout from './layouts/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import FilmReelLoader from './components/FilmReelLoader';
 
 const Home = lazy(() => import('./pages/Home'));
 const MovieList = lazy(() => import('./pages/MovieList'));
@@ -23,18 +24,7 @@ const Hall = lazy(() => import('./pages/Hall'));
 const HallDetail = lazy(() => import('./pages/HallDetail'));
 
 const Loader = () => (
-  <div
-    className="min-h-screen flex items-center justify-center"
-    style={{ background: '#121212' }}
-  >
-    <div className="flex flex-col items-center gap-3">
-      <svg className="w-8 h-8 animate-spin" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-20" cx="12" cy="12" r="10" stroke="#CF0F47" strokeWidth="4" />
-        <path className="opacity-80" fill="#CF0F47" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-      <span className="text-zinc-600 text-sm">Đang tải...</span>
-    </div>
-  </div>
+  <FilmReelLoader fullScreen size="lg" text="Đang tải dữ liệu trang..." />
 );
 
 const GlobalPageLoader = () => {
@@ -44,18 +34,29 @@ const GlobalPageLoader = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
     setVisible(true);
+    let raf1 = null;
+    let raf2 = null;
+
+    // Đợi trang mới render xong và đếm đủ ít nhất 1 frame ảnh (double rAF) rồi mới đóng loader
     const timer = setTimeout(() => {
-      setVisible(false);
-    }, 450);
-    return () => clearTimeout(timer);
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          setVisible(false);
+        });
+      });
+    }, 800);
+
+    return () => {
+      clearTimeout(timer);
+      if (raf1) cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
   }, [location.pathname]);
 
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#121212] transition-all">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cta"></div>
-    </div>
+    <FilmReelLoader fullScreen size="lg" text="Đang tải dữ liệu trang..." />
   );
 };
 

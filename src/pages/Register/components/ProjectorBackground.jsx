@@ -50,7 +50,9 @@ export default function ProjectorBackground() {
       p.fadingOut = false;
     };
 
-    const particleCount = 200;
+    // Detect mobile for rendering optimization
+    const isMobile = window.innerWidth < 768;
+    const particleCount = isMobile ? 35 : 200;
     const particles = [];
 
     for (let i = 0; i < particleCount; i++) {
@@ -79,18 +81,33 @@ export default function ProjectorBackground() {
         p.x += p.vx + Math.sin(p.phase) * 0.15;
         p.y += p.vy + Math.cos(p.phase * 0.7) * 0.1;
 
-        const dx = p.x - source.x;
-        const dy = p.y - source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        let isInside = true;
+        let edgeMultiplier = 1;
+        let distMultiplier = 1;
 
-        let angleRad = Math.atan2(dy, dx);
-        let angleDeg = angleRad * (180 / Math.PI);
-        if (angleDeg < 0) angleDeg += 360;
-        const cssAngle = (angleDeg + 90) % 360;
+        if (!isMobile) {
+          const dx = p.x - source.x;
+          const dy = p.y - source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const inBeamAngle = cssAngle >= 170 && cssAngle <= 260;
-        const inBeamDist = dist < maxDist;
-        const isInside = inBeamAngle && inBeamDist && p.x >= 0 && p.x <= canvas.width && p.y >= -100 && p.y <= canvas.height;
+          let angleRad = Math.atan2(dy, dx);
+          let angleDeg = angleRad * (180 / Math.PI);
+          if (angleDeg < 0) angleDeg += 360;
+          const cssAngle = (angleDeg + 90) % 360;
+
+          const inBeamAngle = cssAngle >= 170 && cssAngle <= 260;
+          const inBeamDist = dist < maxDist;
+          isInside = inBeamAngle && inBeamDist && p.x >= 0 && p.x <= canvas.width && p.y >= -100 && p.y <= canvas.height;
+
+          if (isInside) {
+            const devToCenter = Math.abs(cssAngle - 215);
+            edgeMultiplier = Math.max(0, 1 - (devToCenter / 45));
+            distMultiplier = Math.max(0, 1 - (dist / maxDist));
+          }
+        } else {
+          // Simplier screen boundary check for mobile performance
+          isInside = p.x >= 0 && p.x <= canvas.width && p.y >= -100 && p.y <= canvas.height;
+        }
 
         if (!isInside) {
           p.fadingOut = true;
@@ -116,15 +133,15 @@ export default function ProjectorBackground() {
         }
 
         if (p.alpha > 0) {
-          const devToCenter = Math.abs(cssAngle - 215);
-          const edgeMultiplier = Math.max(0, 1 - (devToCenter / 45));
-          const distMultiplier = Math.max(0, 1 - (dist / maxDist));
-
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255, 252, 240, ${Math.min(0.55, p.alpha * edgeMultiplier * distMultiplier)})`;
-          ctx.shadowBlur = p.radius * 2.5;
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.22)';
+          
+          if (!isMobile) {
+            // Disable expensive shadows on mobile devices
+            ctx.shadowBlur = p.radius * 2.5;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.22)';
+          }
           ctx.fill();
         }
       });

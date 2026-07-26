@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import GenreChip from './GenreChip';
+import { uploadMoviePoster } from '../../../../services/mediaService';
 
 const GENRES = [
   'Hành động', 'Phiêu lưu', 'Hài hước', 'Kinh dị', 'Lãng mạng', 'Giả tưởng',
@@ -44,7 +45,26 @@ const labelClass = 'block text-xs font-semibold text-zinc-400 mb-1.5 uppercase t
 export default function MovieFormModal({ open, onClose, onSave, initial }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [uploadingPoster, setUploadingPoster] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const handlePosterFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingPoster(true);
+      console.log('>>> [Cloudinary] Uploading movie poster file to Cloudinary:', file.name);
+      const cloudinaryUrl = await uploadMoviePoster(file);
+      console.log('>>> [Cloudinary] Received Cloudinary URL:', cloudinaryUrl);
+      setForm((p) => ({ ...p, posterUrl: cloudinaryUrl }));
+    } catch (err) {
+      console.error('Failed to upload image to Cloudinary:', err);
+      alert('Không thể tải ảnh lên Cloudinary! Vui lòng thử lại.');
+    } finally {
+      setUploadingPoster(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -301,25 +321,63 @@ export default function MovieFormModal({ open, onClose, onSave, initial }) {
             </div>
           </div>
 
-          {/* Poster URL */}
+          {/* Poster URL & Cloudinary Upload */}
           <div>
-            <label className={labelClass}>URL Poster</label>
-            <div className="flex gap-2">
-              <input
-                id="field-posterUrl"
-                type="url"
-                className={inputClass}
-                placeholder="https://..."
-                value={form.posterUrl}
-                onChange={(e) => set('posterUrl', e.target.value)}
-              />
-              {form.posterUrl && (
-                <img
-                  src={form.posterUrl}
-                  alt="preview"
-                  className="w-10 h-14 object-cover rounded-lg border border-white/10 shrink-0"
-                  onError={(e) => { e.target.style.display = 'none'; }}
+            <label className={labelClass}>Poster Phim (Tải file từ máy hoặc dán URL)</label>
+            <div className="space-y-2">
+              <div className="flex gap-2 items-center">
+                <label className="flex items-center justify-center px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold rounded-lg border border-white/15 cursor-pointer transition-all shrink-0 select-none">
+                  {uploadingPoster ? (
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Đang tải lên Cloudinary...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Tải ảnh từ máy
+                    </span>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingPoster}
+                    onChange={handlePosterFileUpload}
+                  />
+                </label>
+                <input
+                  id="field-posterUrl"
+                  type="url"
+                  className={inputClass}
+                  placeholder="Hoặc dán URL https://..."
+                  value={form.posterUrl}
+                  onChange={(e) => set('posterUrl', e.target.value)}
                 />
+              </div>
+              {form.posterUrl && (
+                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                  <img
+                    src={form.posterUrl}
+                    alt="preview"
+                    className="w-12 h-16 object-cover rounded-lg border border-white/10 shrink-0 shadow-md"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  <div className="text-xs text-zinc-400 truncate flex-1 min-w-0">
+                    <p className="text-emerald-400 font-bold flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Ảnh đã sẵn sàng (Cloudinary / CDN)
+                    </p>
+                    <p className="truncate text-zinc-500 font-mono text-[10px] mt-0.5">{form.posterUrl}</p>
+                  </div>
+                </div>
               )}
             </div>
           </div>

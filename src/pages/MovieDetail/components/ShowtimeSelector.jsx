@@ -84,7 +84,7 @@ export default function ShowtimeSelector({
                           className="w-full py-0.5 flex items-center justify-center border-t text-[9px] font-semibold bg-black/25 group-hover:bg-black/15 border-white/5 transition-colors"
                         >
                           <span className="text-zinc-500 group-hover:text-white transition-colors">
-                            {st.available}/100
+                            {st.available}/{st.total || 100}
                           </span>
                         </div>
                       </button>

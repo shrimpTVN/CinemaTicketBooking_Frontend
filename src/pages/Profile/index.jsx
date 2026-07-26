@@ -5,6 +5,9 @@ import { Camera, Trophy, X } from 'lucide-react';
 import TabFilter from '../../components/TabFilter';
 import HolographicTicket from '../../components/HolographicTicket';
 import { changePassword, updateProfile } from '../../services/authService';
+import { USE_MOCK } from '../../services/apiConfig';
+import apiClient from '../../services/apiClient';
+import { getNowShowing } from '../../services/movieService';
 
 // Sub-components
 import PasswordModal from './components/PasswordModal';
@@ -83,6 +86,8 @@ export default function Profile() {
   // Active Tab: 'info' | 'history' | 'rewards' | 'privacy'
   const [activeTab, setActiveTab] = useState('info');
   const [localTickets, setLocalTickets] = useState([]);
+  const [dbInvoices, setDbInvoices] = useState([]);
+  const [moviesList, setMoviesList] = useState([]);
   const [selectedTicketForModal, setSelectedTicketForModal] = useState(null);
 
   useEffect(() => {
@@ -93,6 +98,27 @@ export default function Profile() {
       console.error("Error loading local tickets", e);
     }
   }, []);
+
+  useEffect(() => {
+    if (!USE_MOCK && user && user.id) {
+      console.log(">>> Fetching invoices from BE for user ID:", user.id);
+      apiClient.get(`/invoices/users/${user.id}`)
+        .then(res => {
+          const invoices = Array.isArray(res) ? res : (res?.data || []);
+          console.log(">>> Invoices loaded from BE:", invoices);
+          setDbInvoices(invoices);
+        })
+        .catch(err => {
+          console.error("Failed to fetch invoices from BE:", err);
+        });
+      
+      getNowShowing().then((data) => {
+        setMoviesList(data);
+      }).catch(err => console.error("Failed to load movies:", err));
+    } else {
+      console.log(">>> Skip fetching invoices. USE_MOCK:", USE_MOCK, "user:", user);
+    }
+  }, [user]);
 
   // Edit Mode for Personal Info
   const [isEditing, setIsEditing] = useState(false);
@@ -328,55 +354,131 @@ export default function Profile() {
   };
 
   const allTickets = useMemo(() => {
-    const adaptedLocal = localTickets.map(t => ({
-      id: t.ticketCode,
-      title: t.movie.title,
-      poster: t.movie.posterUrl,
-      theater: 'Galaxy Cinema',
-      room: t.showtime.room,
-      date: t.date.dateLabel,
-      time: `${t.showtime.start} ~ ${t.showtime.end || ''}`,
-      seats: t.seats.join(', '),
-      combo: t.combos ? t.combos.join(', ') : 'Không kèm combo',
-      price: t.total,
-      status: 'Thành công',
-      format: t.showtime.format,
-      lang: t.showtime.lang,
-      ageRating: t.movie.ageRating,
-      isLocal: true,
-      rawTicket: t
-    }));
-    return [...adaptedLocal, ...mockTickets];
-  }, [localTickets]);
+    if (USE_MOCK) {
+      const adaptedLocal = localTickets.map(t => ({
+        id: t.ticketCode,
+        title: t.movie.title,
+        poster: t.movie.posterUrl,
+        theater: 'Galaxy Cinema',
+        room: t.showtime.room,
+        date: t.date.dateLabel,
+        time: `${t.showtime.start} ~ ${t.showtime.end || ''}`,
+        seats: t.seats.join(', '),
+        combo: t.combos ? t.combos.join(', ') : 'Không kèm combo',
+        price: t.total,
+        status: 'Thành công',
+        format: t.showtime.format,
+        lang: t.showtime.lang,
+        ageRating: t.movie.ageRating,
+        isLocal: true,
+        rawTicket: t
+      }));
+      return [...adaptedLocal, ...mockTickets];
+    }
+
+    // HÓA ĐƠN THẬT TỪ DATABASE (chỉ hiển thị hóa đơn đã thanh toán thành công):
+    const paidInvoices = dbInvoices.filter(inv => inv.status === 'PAID');
+
+    return paidInvoices.map(inv => {
+      const movieObj = moviesList.find(m => m.id === inv.showtime.movieId);
+      const poster = movieObj?.posterUrl || '';
+      const ageRating = movieObj?.ageRating || 'P';
+
+      const seatLabels = inv.tickets.map(t => t.seatRowLabel + t.seatColNumber).join(', ');
+      const comboLabels = inv.products.length > 0
+        ? inv.products.map(p => `${p.quantity}x ${p.productName}`).join(', ')
+        : 'Không kèm combo';
+
+      let formattedDate = inv.showtime.date;
+      try {
+        if (inv.showtime.date) {
+          const d = new Date(inv.showtime.date);
+          formattedDate = d.toLocaleDateString('vi-VN');
+        }
+      } catch (e) {}
+
+      const startTime = inv.showtime.startTime ? inv.showtime.startTime.substring(0, 5) : '';
+
+      return {
+        id: `INV${inv.invoiceId}`,
+        title: inv.showtime.movieName,
+        poster,
+        theater: 'Galaxy Cinema',
+        room: inv.showtime.hallName || 'Phòng 3',
+        date: formattedDate,
+        time: startTime,
+        seats: seatLabels,
+        combo: comboLabels,
+        price: Number(inv.totalAmount),
+        status: 'Thành công',
+        format: inv.showtime.type || '2D',
+        lang: 'Phụ đề',
+        ageRating,
+        isLocal: false,
+        rawInvoice: inv
+      };
+    });
+  }, [dbInvoices, moviesList, localTickets]);
 
   const handleTicketClick = (ticket) => {
-    const ticketToView = ticket.isLocal ? ticket.rawTicket : {
-      ticketCode: ticket.id,
-      movie: {
-        title: ticket.title,
-        posterUrl: ticket.poster,
-        ageRating: ticket.ageRating
-      },
-      showtime: {
-        format: ticket.format,
-        lang: ticket.lang,
-        start: ticket.time.split(' ~ ')[0] || ticket.time,
-        room: ticket.room
-      },
-      date: {
-        dateLabel: ticket.date,
-        dayLabel: ''
-      },
-      seats: ticket.seats.split(', ').map(id => ({ id })),
-      total: ticket.price,
-      payment: {
-        name: 'Thanh toán online',
-        bg: '#1a56db',
-        letter: 'C'
-      },
-      combos: ticket.combo && ticket.combo !== 'Không kèm combo' ? [ticket.combo] : []
-    };
-    setSelectedTicketForModal(ticketToView);
+    if (ticket.rawInvoice) {
+      const inv = ticket.rawInvoice;
+      const ticketToView = {
+        ticketCode: `INV${inv.invoiceId}`,
+        movie: {
+          title: inv.showtime.movieName,
+          posterUrl: ticket.poster,
+          ageRating: ticket.ageRating
+        },
+        showtime: {
+          format: inv.showtime.type || '2D',
+          lang: 'Phụ đề',
+          start: inv.showtime.startTime ? inv.showtime.startTime.substring(0, 5) : '',
+          room: inv.showtime.hallName
+        },
+        date: {
+          dateLabel: ticket.date,
+          dayLabel: ''
+        },
+        seats: inv.tickets.map(t => ({ id: t.seatRowLabel + t.seatColNumber })),
+        total: Number(inv.totalAmount),
+        payment: {
+          name: inv.paymentMethod === 'VNPAY' ? 'Ví VNPay' : inv.paymentMethod,
+          bg: '#1a56db',
+          letter: 'P'
+        },
+        combos: inv.products.map(p => `${p.quantity}x ${p.productName}`)
+      };
+      setSelectedTicketForModal(ticketToView);
+    } else {
+      const ticketToView = ticket.isLocal ? ticket.rawTicket : {
+        ticketCode: ticket.id,
+        movie: {
+          title: ticket.title,
+          posterUrl: ticket.poster,
+          ageRating: ticket.ageRating
+        },
+        showtime: {
+          format: ticket.format,
+          lang: ticket.lang,
+          start: ticket.time.split(' ~ ')[0] || ticket.time,
+          room: ticket.room
+        },
+        date: {
+          dateLabel: ticket.date,
+          dayLabel: ''
+        },
+        seats: ticket.seats.split(', ').map(id => ({ id })),
+        total: ticket.price,
+        payment: {
+          name: 'Thanh toán online',
+          bg: '#1a56db',
+          letter: 'C'
+        },
+        combos: ticket.combo && ticket.combo !== 'Không kèm combo' ? [ticket.combo] : []
+      };
+      setSelectedTicketForModal(ticketToView);
+    }
   };
 
   if (!user) {

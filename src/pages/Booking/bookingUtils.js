@@ -272,7 +272,7 @@ export const generateVnPayUrl = async ({ invoiceId, amount, returnUrl }) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include', // gửi cookie JWT nếu endpoint yêu cầu auth
-    body: JSON.stringify({ invoiceId, amount }),
+    body: JSON.stringify({ invoiceId, amount, feOrigin: window.location.origin }),
   });
 
   if (!res.ok) {
@@ -283,5 +283,315 @@ export const generateVnPayUrl = async ({ invoiceId, amount, returnUrl }) => {
   const data = await res.json();
   console.log('>>> [VNPay] Payment URL từ BE:', data.paymentUrl);
   return data.paymentUrl;
+};
+
+/**
+ * Trả về mảng các kích thước cụm con cho phép tùy theo tổng số vé N:
+ * - N = 1: [1]
+ * - N = 2: [2]
+ * - N = 3: [3] (không được tách 2+1)
+ * - N = 4: [4, 2] (4 hoặc 2+2)
+ * - N = 5: [3, 2] (chỉ chọn cụm 3 và cụm 2, không chọn 5)
+ * - N = 6: [4, 3, 2] (tách 4+2, 3+3, 2+2+2)
+ * - N = 7: [4, 3, 2] (chỉ chấp nhận tổ hợp 4+3 hoặc 3+2+2)
+ * - N >= 8: [4, 3, 2] (tách 4+4, 3+3+2, 2+2+2+2)
+ */
+export const getValidSubBlockSizes = (ticketCount) => {
+  if (ticketCount <= 0) return [];
+  if (ticketCount === 1) return [1];
+  if (ticketCount === 2) return [2];
+  if (ticketCount === 3) return [3];
+  if (ticketCount === 4) return [4, 2];
+  if (ticketCount === 5) return [3, 2];
+  if (ticketCount === 6) return [4, 3, 2];
+  if (ticketCount === 7) return [4, 3, 2];
+  if (ticketCount >= 8) return [4, 3, 2];
+  return [2];
+};
+
+/**
+ * Kiểm tra xem một ghế tại vị trí colIdx trong rowSeats có bị DISABLE hay không
+ * khi chọn số lượng vé ticketCount và danh sách ghế đã chọn selectedSeatIds.
+ */
+export const isSeatDisabledForCount = (seat, rowSeats, ticketCountOrBlockSize, selectedSeatIds) => {
+  if (!seat || seat.status === 'booked' || seat.status === 'held') return false;
+  if (ticketCountOrBlockSize <= 0) return false;
+
+  const selectedSet = new Set(selectedSeatIds);
+  if (selectedSet.has(seat.id)) return false;
+
+  const validSizes = typeof ticketCountOrBlockSize === 'number'
+    ? [ticketCountOrBlockSize]
+    : getValidSubBlockSizes(ticketCountOrBlockSize);
+
+  const colIdx = rowSeats.findIndex((s) => s.id === seat.id || s.col === seat.col);
+  if (colIdx === -1) return false;
+
+  const isTaken = (s) => {
+    if (!s) return true;
+    if (s.status === 'booked' || s.status === 'held') return true;
+    if (selectedSet.has(s.id)) return true;
+    if (s.type === 'walkway') return true;
+    return false;
+  };
+
+  const totalCols = rowSeats.length;
+
+  for (const size of validSizes) {
+    if (size > totalCols) continue;
+    for (let startIdx = colIdx - size + 1; startIdx <= colIdx; startIdx++) {
+      if (startIdx < 0 || startIdx + size > totalCols) continue;
+      const endIdx = startIdx + size - 1;
+
+      let blockValid = true;
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (isTaken(rowSeats[i])) {
+          blockValid = false;
+          break;
+        }
+      }
+      if (!blockValid) continue;
+
+      let leftValid = true;
+      if (startIdx > 0) {
+        const left1 = rowSeats[startIdx - 1];
+        if (!isTaken(left1)) {
+          const left2 = startIdx > 1 ? rowSeats[startIdx - 2] : null;
+          if (isTaken(left2)) {
+            leftValid = false;
+          }
+        }
+      }
+
+      let rightValid = true;
+      if (endIdx < totalCols - 1) {
+        const right1 = rowSeats[endIdx + 1];
+        if (!isTaken(right1)) {
+          const right2 = endIdx < totalCols - 2 ? rowSeats[endIdx + 2] : null;
+          if (isTaken(right2)) {
+            rightValid = false;
+          }
+        }
+      }
+
+      if (leftValid && rightValid) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
+
+/**
+ * Tính toán kích thước cụm ghế mục tiêu cho bước chọn tiếp theo dựa trên số vé còn lại
+ */
+export const getActiveBlockSize = (ticketCount, selectedCount, selectedBlockModeSize) => {
+  const remaining = ticketCount - selectedCount;
+  if (remaining <= 0) return 1;
+
+  if (ticketCount === 5) {
+    if (remaining === 3) return 3;
+    if (remaining === 2) return 2;
+    return selectedBlockModeSize || 3;
+  }
+
+  if (ticketCount === 7) {
+    if (selectedBlockModeSize === 4) {
+      if (remaining === 3) return 3;
+      if (remaining >= 4) return 4;
+    } else {
+      if (remaining === 3) return 3;
+      if (remaining === 2) return 2;
+      if (remaining >= 4) return 3;
+    }
+  }
+
+  if (ticketCount === 6 && selectedBlockModeSize === 4) {
+    if (remaining === 2) return 2;
+    if (remaining >= 4) return 4;
+  }
+
+  if (ticketCount >= 8 && selectedBlockModeSize === 3) {
+    if (remaining === 2) return 2;
+    if (remaining >= 3) return 3;
+  }
+
+  return Math.min(remaining, selectedBlockModeSize || remaining);
+};
+
+/**
+ * Trả về danh sách các chế độ Radio "Chọn ghế liền nhau" phù hợp với tổng số vé N:
+ * Ví dụ: N = 4 -> [{ size: 2, label: '2 ghế liền nhau (2+2)' }, { size: 4, label: '4 ghế liền nhau' }]
+ */
+export const getBlockModesForTicketCount = (ticketCount) => {
+  if (ticketCount <= 0) return [];
+  if (ticketCount === 1) return [{ size: 1, label: '1 ghế', count: 1 }];
+  if (ticketCount === 2) return [{ size: 2, label: '2 ghế liền nhau', count: 2 }];
+  if (ticketCount === 3) return [{ size: 3, label: '3 ghế liền nhau', count: 3 }];
+  if (ticketCount === 4) return [
+    { size: 2, label: '2 ghế (2+2)', count: 2 },
+    { size: 4, label: '4 ghế liền', count: 4 },
+  ];
+  if (ticketCount === 5) return [
+    { size: 2, label: 'Cụm 2 & 3 ghế (2+3)', count: 2 },
+    { size: 3, label: 'Cụm 3 & 2 ghế (3+2)', count: 3 },
+  ];
+  if (ticketCount === 6) return [
+    { size: 2, label: '2 ghế (2+2+2)', count: 2 },
+    { size: 3, label: '3 ghế (3+3)', count: 3 },
+    { size: 4, label: '4 ghế (4+2)', count: 4 },
+  ];
+  if (ticketCount === 7) return [
+    { size: 4, label: '4 + 3 ghế', count: 4 },
+    { size: 3, label: '3 + 2 + 2 ghế', count: 3 },
+  ];
+  if (ticketCount >= 8) return [
+    { size: 2, label: '2 ghế (2x4)', count: 2 },
+    { size: 3, label: '3 ghế (3+3+2)', count: 3 },
+    { size: 4, label: '4 ghế (4+4)', count: 4 },
+  ];
+  return [{ size: 2, label: '2 ghế liền nhau', count: 2 }];
+};
+
+/**
+ * Tìm khối ghế con hợp lệ tốt nhất có độ dài `blockSize` chứa `colIdx` trong `rowSeats`.
+ * Khối hợp lệ PHẢI:
+ * 1. Phù hợp với cụm phân chia tự nhiên từ lề rạp (Grid Alignment: [6,5], [4,3], [2,1]).
+ * 2. Không chứa ghế đã bán, đã giữ, đã chọn, hoặc lối đi.
+ * 3. Tối thiểu hóa ô trống 1 ghế đơn lẻ ở 2 bên.
+ */
+export const findBestValidCandidateBlock = (colIdx, blockSize, rowSeats, selectedSet) => {
+  if (colIdx === -1 || blockSize <= 0 || !Array.isArray(rowSeats)) return null;
+
+  const totalCols = rowSeats.length;
+
+  const isTaken = (s) => {
+    if (!s) return true;
+    if (s.status === 'booked' || s.status === 'held') return true;
+    if (selectedSet && selectedSet.has(s.id)) return true;
+    if (s.type === 'walkway') return true;
+    return false;
+  };
+
+  const candidates = [];
+  const gridStartIdx = Math.floor(colIdx / blockSize) * blockSize;
+
+  for (let offset = 0; offset < blockSize; offset++) {
+    const startIdx = colIdx - offset;
+    if (startIdx < 0 || startIdx + blockSize > totalCols) continue;
+    const endIdx = startIdx + blockSize - 1;
+
+    let blockValid = true;
+    for (let i = startIdx; i <= endIdx; i++) {
+      if (isTaken(rowSeats[i])) {
+        blockValid = false;
+        break;
+      }
+    }
+    if (!blockValid) continue;
+
+    let leftOrphan = false;
+    if (startIdx > 0) {
+      const left1 = rowSeats[startIdx - 1];
+      if (!isTaken(left1)) {
+        const left2 = startIdx > 1 ? rowSeats[startIdx - 2] : null;
+        if (isTaken(left2)) {
+          leftOrphan = true;
+        }
+      }
+    }
+
+    let rightOrphan = false;
+    if (endIdx < totalCols - 1) {
+      const right1 = rowSeats[endIdx + 1];
+      if (!isTaken(right1)) {
+        const right2 = endIdx < totalCols - 2 ? rowSeats[endIdx + 2] : null;
+        if (isTaken(right2)) {
+          rightOrphan = true;
+        }
+      }
+    }
+
+    const orphanCount = (leftOrphan ? 1 : 0) + (rightOrphan ? 1 : 0);
+    candidates.push({
+      startIdx,
+      block: rowSeats.slice(startIdx, startIdx + blockSize),
+      orphanCount,
+      isGridMatch: startIdx === gridStartIdx,
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // 1. Ưu tiên cụm khớp 100% với lưới chia tự nhiên [6,5], [4,3], [2,1] không có ô mồ côi
+  const gridZeroOrphan = candidates.find((c) => c.orphanCount === 0 && c.isGridMatch);
+  if (gridZeroOrphan) return gridZeroOrphan.block;
+
+  // 2. Dự phòng: Bất kỳ cụm nào không có ô mồ côi
+  const zeroOrphan = candidates.find((c) => c.orphanCount === 0);
+  if (zeroOrphan) return zeroOrphan.block;
+
+  // 3. Sắp xếp ưu tiên theo orphanCount nhỏ nhất, rồi đến c.isGridMatch
+  candidates.sort((a, b) => {
+    if (a.orphanCount !== b.orphanCount) return a.orphanCount - b.orphanCount;
+    if (a.isGridMatch !== b.isGridMatch) return a.isGridMatch ? -1 : 1;
+    return 0;
+  });
+
+  return candidates[0].block;
+};
+
+/**
+ * Quét toàn bộ ghế đã chọn để tìm xem có ô ghế trống đơn lẻ (1 ghế mồ côi) nào vô tình được tạo ra trên các hàng ghế đã chọn hay không.
+ */
+export const findOrphanSeats = (selectedSeats, layout, roomConfig) => {
+  if (!Array.isArray(selectedSeats) || selectedSeats.length === 0) return [];
+  const selectedSet = new Set(selectedSeats.map((s) => s.id));
+  const orphanSeatIds = new Set();
+
+  const rowsWithSelection = [...new Set(selectedSeats.map((s) => s.row))];
+
+  rowsWithSelection.forEach((row) => {
+    const rowLayout = roomConfig?.layout?.[row];
+    if (!rowLayout) return;
+
+    const cols = rowLayout.cols;
+    const sortedCols = [...cols].sort((a, b) => b - a);
+
+    const list = [];
+    sortedCols.forEach((c, idx) => {
+      const seatObj = layout[`${row}${c}`] || { id: `${row}${c}`, row, col: c, status: 'available' };
+      list.push(seatObj);
+      const nextCol = sortedCols[idx + 1];
+      const isColGap = nextCol !== undefined && Math.abs(c - nextCol) > 1;
+      const type = rowLayout.type || 'normal';
+      const isVIPRow = type === 'vip';
+      const hasAisle = roomConfig?.aisles?.includes(c) || (roomConfig?.centerAisle === c && !isVIPRow) || isColGap;
+      if (hasAisle) {
+        list.push({ id: `walkway-${row}-${c}`, row, col: `walkway-${c}`, type: 'walkway', status: 'available' });
+      }
+    });
+
+    const isTaken = (s) => {
+      if (!s) return true;
+      if (s.status === 'booked' || s.status === 'held') return true;
+      if (selectedSet.has(s.id)) return true;
+      if (s.type === 'walkway') return true;
+      return false;
+    };
+
+    list.forEach((s, idx) => {
+      if (s.type === 'walkway' || isTaken(s)) return;
+      const leftTaken = isTaken(list[idx - 1]);
+      const rightTaken = isTaken(list[idx + 1]);
+
+      if (leftTaken && rightTaken) {
+        orphanSeatIds.add(s.id);
+      }
+    });
+  });
+
+  return Array.from(orphanSeatIds);
 };
 

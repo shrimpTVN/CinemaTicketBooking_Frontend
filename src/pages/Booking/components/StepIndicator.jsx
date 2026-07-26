@@ -2,12 +2,13 @@ const STEP_LABELS = ['Phim & Suất chiếu', 'Chọn ghế', 'Combo', 'Thanh to
 
 export default function StepIndicator({ step }) {
   const allDone = step === 'success';
+  const displayStep = step === 'failure' ? 4 : step;
 
   const items = [];
   STEP_LABELS.forEach((label, i) => {
     const n = i + 1;
-    const done = allDone || n < step;
-    const active = !allDone && n === step;
+    const done = allDone || n < displayStep;
+    const active = !allDone && n === displayStep;
 
     items.push(
       <div key={`step-${n}`} className="flex flex-col items-center gap-1 sm:gap-1.5" style={{ minWidth: 48 }}>

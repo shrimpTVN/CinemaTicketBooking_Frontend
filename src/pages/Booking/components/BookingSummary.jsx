@@ -19,7 +19,9 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
     const c = resolvedProducts.find((x) => x.id === id);
     return s + (c ? c.price * qty : 0);
   }, 0);
-  const total = seatTotal + comboTotal;
+  const subtotal = seatTotal + comboTotal;
+  const vat = subtotal * 0.08;
+  const total = subtotal + vat;
 
   const nextLabel =
     step === 4 ? 'Xác nhận thanh toán' :
@@ -70,7 +72,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
                     <h3 className="text-white font-bold text-base leading-tight mb-2 line-clamp-2">{movie.title}</h3>
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400 text-left mt-1 leading-none">
                       {showtime ? (
-                        <span>{showtime.format} {showtime.lang === 'Phụ đề' ? 'Phụ Đề' : 'Thuyết Minh'}</span>
+                        <span>{showtime.format} {showtime.lang}</span>
                       ) : (
                         <span className="text-zinc-550 italic">Chưa chọn định dạng</span>
                       )}
@@ -160,11 +162,21 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
             <div className="border-t border-dashed border-zinc-700 my-4" />
 
             {/* Row 4: Total Price Block */}
-            <div className="flex justify-between items-center text-left">
-              <span className="text-zinc-300 text-sm font-semibold">Tổng cộng</span>
-              <span className="font-bold text-lg" style={{ color: '#EAB308' }}>
-                {fmtVND(total)}
-              </span>
+            <div className="flex flex-col gap-1.5 w-full text-sm">
+              <div className="flex justify-between text-zinc-400">
+                <span>Tạm tính</span>
+                <span>{fmtVND(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-400">
+                <span>Thuế VAT (8%)</span>
+                <span>{fmtVND(vat)}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-zinc-800 pt-2 text-left">
+                <span className="text-zinc-300 font-semibold">Tổng cộng</span>
+                <span className="font-bold text-lg" style={{ color: '#EAB308' }}>
+                  {fmtVND(total)}
+                </span>
+              </div>
             </div>
           </div>
         </div>

@@ -17,8 +17,9 @@ const getUseMockPreference = () => {
 
 export const USE_MOCK = getUseMockPreference();
 
-// 2. Resolve API URL
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+// 2. Resolve API URL (Use relative '/api' path to leverage Vite Proxy and enable same-origin cookie sending)
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '930594519981-94g92j79lqsht3jkoborqjrp62i62i9n.apps.googleusercontent.com';
 
 /**
  * Toggle between Mock and API mode dynamically in the browser console.

@@ -5,8 +5,14 @@ import apiClient from './apiClient';
  */
 export const getAllHalls = async () => {
   try {
-    const res = await apiClient.get('/halls');
-    return Array.isArray(res) ? res : res?.data || [];
+    let res;
+    try {
+      res = await apiClient.get('/halls');
+    } catch {
+      res = await apiClient.get('/halls/');
+    }
+    const data = res?.data || res;
+    return Array.isArray(data) ? data : (data?.content || []);
   } catch (error) {
     console.error('getAllHalls API error:', error);
     return [];
@@ -70,8 +76,14 @@ export const updateHall = async (id, hallData) => {
  */
 export const getAllHallTypes = async () => {
   try {
-    const res = await apiClient.get('/hall-types');
-    return Array.isArray(res) ? res : res?.data || [];
+    let res;
+    try {
+      res = await apiClient.get('/hall-types');
+    } catch {
+      res = await apiClient.get('/hall-types/');
+    }
+    const data = res?.data || res;
+    return Array.isArray(data) ? data : (data?.content || []);
   } catch (error) {
     console.error('getAllHallTypes API error:', error);
     return [];
@@ -83,8 +95,14 @@ export const getAllHallTypes = async () => {
  */
 export const getAllSeatTypes = async () => {
   try {
-    const res = await apiClient.get('/seat-types');
-    return Array.isArray(res) ? res : res?.data || [];
+    let res;
+    try {
+      res = await apiClient.get('/seat-types');
+    } catch {
+      res = await apiClient.get('/seat-types/');
+    }
+    const data = res?.data || res;
+    return Array.isArray(data) ? data : (data?.content || []);
   } catch (error) {
     console.error('getAllSeatTypes API error:', error);
     return [];

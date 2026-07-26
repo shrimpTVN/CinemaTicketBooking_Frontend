@@ -61,15 +61,20 @@ export default function AdminHalls() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [hList, tList, sList] = await Promise.all([
+      const results = await Promise.allSettled([
         getAllHalls(),
         getAllHallTypes(),
         getAllSeatTypes()
       ]);
+
+      const hList = results[0].status === 'fulfilled' && Array.isArray(results[0].value) ? results[0].value : [];
+      const tList = results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : [];
+      const sList = results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : [];
+
       setHalls(hList);
       setHallTypes(tList);
       setSeatTypes(sList);
-      
+
       // Chọn loại ghế thường đầu tiên làm mặc định trong bảng vẽ
       if (sList.length > 0) {
         const reg = sList.find(s => s.name.toLowerCase().includes('thường')) || sList[0];
@@ -170,12 +175,12 @@ export default function AdminHalls() {
             prev.map((h) =>
               h.id === editingHall.id
                 ? {
-                    ...h,
-                    name: updated.name,
-                    width: updated.width,
-                    height: updated.height,
-                    hallType: matchedType ? matchedType.name : h.hallType
-                  }
+                  ...h,
+                  name: updated.name,
+                  width: updated.width,
+                  height: updated.height,
+                  hallType: matchedType ? matchedType.name : h.hallType
+                }
                 : h
             )
           );
@@ -185,17 +190,42 @@ export default function AdminHalls() {
           addToast('Cập nhật phòng chiếu thất bại', 'error');
         }
       } else {
+        // 1. Tạo phòng chiếu trong CSDL (POST /api/halls)
         const created = await createHall(hallForm);
-        if (created) {
+        if (created && created.id) {
+          // 2. Tự động sinh danh sách sơ đồ ghế ban đầu theo kích thước (Chiều cao x Chiều rộng)
+          const defaultSeatType = seatTypes.find(s => s.name.toLowerCase().includes('thường')) || seatTypes[0];
+          const defaultSeatTypeId = defaultSeatType ? defaultSeatType.id : 1;
+
+          const initialSeats = [];
+          for (let r = 0; r < hallForm.height; r++) {
+            const rowLabel = getRowLabel(r);
+            for (let c = 1; c <= hallForm.width; c++) {
+              initialSeats.push({
+                seatTypeId: defaultSeatTypeId,
+                rowLabel,
+                colNumber: c,
+                status: 'ON'
+              });
+            }
+          }
+
+          // 3. Tự động gọi API khởi tạo sơ đồ ghế (POST /api/halls/{id}/seat-map)
+          try {
+            await generateHallSeatMap(created.id, initialSeats);
+          } catch (seatErr) {
+            console.warn('Auto seat map generation warning:', seatErr);
+          }
+
           setHalls((prev) => [created, ...prev]);
-          addToast(`Đã tạo thành công phòng "${created.name}"`, 'success');
+          addToast(`Tạo thành công phòng "${created.name}" cùng sơ đồ ${initialSeats.length} ghế!`, 'success');
           setHallModalOpen(false);
         } else {
           addToast('Tạo phòng chiếu thất bại', 'error');
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('handleSaveHall error:', err);
       addToast('Có lỗi xảy ra khi lưu phòng chiếu', 'error');
     } finally {
       setSavingHall(false);
@@ -305,17 +335,17 @@ export default function AdminHalls() {
     setSeatMapModalOpen(true);
     try {
       const seats = await getHallSeatMap(hall.id);
-      
+
       // Sắp xếp danh sách ghế lấy từ backend theo ID tăng dần
       const sortedSeats = [...seats].sort((a, b) => a.id - b.id);
 
       const localGrid = [];
       const rows = hall.height;
       const cols = hall.width;
-      
+
       // Nếu số lượng ghế trả về khớp với kích thước phòng, khớp trực tiếp theo chỉ số (index)
       const useIndexMatch = sortedSeats.length === (rows * cols);
-      
+
       const seatLookup = {};
       if (!useIndexMatch) {
         sortedSeats.forEach(s => {
@@ -329,23 +359,23 @@ export default function AdminHalls() {
         const rLabel = getRowLabel(r);
         for (let c = 1; c <= cols; c++) {
           let existingSeat = null;
-          
+
           if (useIndexMatch) {
             existingSeat = sortedSeats[r * cols + (c - 1)];
           } else {
             const key = `${rLabel}-${c}`;
             existingSeat = seatLookup[key];
-            
+
             // Fallback: Tìm ghế có colNumber = c trong hàng r của danh sách ghế chưa được khớp (bao gồm cả nhãn hàng 'KO')
             if (!existingSeat) {
-              existingSeat = sortedSeats.find(s => 
-                s.colNumber === c && 
+              existingSeat = sortedSeats.find(s =>
+                s.colNumber === c &&
                 (s.rowLabel === rLabel || s.rowLabel === 'KO') &&
                 !localGrid.some(g => g.id === s.id)
               );
             }
           }
-          
+
           localGrid.push({
             row: r,
             col: c,
@@ -400,11 +430,11 @@ export default function AdminHalls() {
     setSavingSeatMap(true);
     try {
       const payload = gridSeats.map((cell) => ({
-        id: cell.id,
-        seatTypeId: cell.seatTypeId,
+        ...(cell.id ? { id: cell.id } : {}),
+        seatTypeId: Number(cell.seatTypeId),
         rowLabel: cell.rowLabel,
-        colNumber: cell.colNumber,
-        status: cell.status || 'ACTIVE'
+        colNumber: Number(cell.colNumber),
+        status: cell.status === 'OFF' ? 'OFF' : 'ON'
       }));
 
       // Kiểm tra xem phòng đã có ghế chưa (nếu tất cả id ghế đều null/undefined tức là phòng trống chưa khởi tạo)
@@ -415,17 +445,18 @@ export default function AdminHalls() {
         // Gọi API POST /halls/{id}/seat-map
         result = await generateHallSeatMap(selectedHall.id, payload);
       } else {
-        // Gọi API PATCH /halls/{id}/seat-map
-        result = await updateHallSeatMap(selectedHall.id, payload);
+        // Gọi API PATCH /halls/{id}/seat-map (lọc các ghế có ID hợp lệ)
+        const validPayload = payload.filter(c => c.id);
+        result = await updateHallSeatMap(selectedHall.id, validPayload.length > 0 ? validPayload : payload);
       }
       if (result) {
         addToast('Lưu sơ đồ ghế thành công!', 'success');
         setSeatMapModalOpen(false);
       } else {
-        addToast('Lưu sơ đồ ghế thất bại', 'error');
+        addToast('Không thể lưu sơ đồ ghế. Vui lòng kiểm tra lại kết nối Server hoặc Đăng nhập lại Admin', 'error');
       }
     } catch (err) {
-      console.error(err);
+      console.error('Save seat map error:', err);
       addToast('Lỗi hệ thống khi lưu sơ đồ ghế', 'error');
     } finally {
       setSavingSeatMap(false);
@@ -461,11 +492,10 @@ export default function AdminHalls() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-4 py-3 rounded-xl border text-sm font-medium flex items-center gap-2 shadow-2xl transition-all animate-bounce ${
-              t.type === 'error'
-                ? 'bg-red-950/90 border-red-500/30 text-red-200'
-                : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
-            }`}
+            className={`px-4 py-3 rounded-xl border text-sm font-medium flex items-center gap-2 shadow-2xl transition-all animate-bounce ${t.type === 'error'
+              ? 'bg-red-950/90 border-red-500/30 text-red-200'
+              : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
+              }`}
           >
             {t.type === 'error' ? (
               <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -516,9 +546,8 @@ export default function AdminHalls() {
       <div className="flex border-b border-white/5 gap-6">
         <button
           onClick={() => setActiveTab('halls')}
-          className={`pb-3 text-sm font-bold tracking-wide uppercase transition-all relative cursor-pointer ${
-            activeTab === 'halls' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
+          className={`pb-3 text-sm font-bold tracking-wide uppercase transition-all relative cursor-pointer ${activeTab === 'halls' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
         >
           Phòng chiếu ({halls.length})
           {activeTab === 'halls' && (
@@ -527,9 +556,8 @@ export default function AdminHalls() {
         </button>
         <button
           onClick={() => setActiveTab('types')}
-          className={`pb-3 text-sm font-bold tracking-wide uppercase transition-all relative cursor-pointer ${
-            activeTab === 'types' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
+          className={`pb-3 text-sm font-bold tracking-wide uppercase transition-all relative cursor-pointer ${activeTab === 'types' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
         >
           Loại phòng chiếu ({hallTypes.length})
           {activeTab === 'types' && (
@@ -625,9 +653,8 @@ export default function AdminHalls() {
                   </span>
                   <span className="font-mono text-zinc-400">{hall.height} hàng x {hall.width} cột ({hall.width * hall.height} ghế)</span>
                   <div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      hall.status !== 'OFF' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
-                    }`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${hall.status !== 'OFF' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
+                      }`}>
                       {hall.status !== 'OFF' ? 'Hoạt động' : 'Tạm dừng'}
                     </span>
                   </div>
@@ -1086,11 +1113,10 @@ export default function AdminHalls() {
                       <button
                         key={type.id}
                         onClick={() => setSelectedPaletteTypeId(type.id)}
-                        className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-all cursor-pointer text-left ${
-                          isSelected
-                            ? 'bg-indigo-600/10 border-indigo-500 text-white'
-                            : 'bg-zinc-900/30 border-white/5 text-zinc-400 hover:border-white/10 hover:text-zinc-300'
-                        }`}
+                        className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-all cursor-pointer text-left ${isSelected
+                          ? 'bg-indigo-600/10 border-indigo-500 text-white'
+                          : 'bg-zinc-900/30 border-white/5 text-zinc-400 hover:border-white/10 hover:text-zinc-300'
+                          }`}
                       >
                         <div
                           className="w-5 h-5 rounded-md border border-black/30 shrink-0"

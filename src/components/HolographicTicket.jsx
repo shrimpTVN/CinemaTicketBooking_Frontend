@@ -134,7 +134,7 @@ export default function HolographicTicket({ ticket }) {
                       {showtime.format}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-white/5 border border-white/10 text-text-sub2 tracking-wide">
-                      {showtime.lang === 'Phụ đề' ? 'Phụ đề' : 'Thuyết minh'}
+                      {showtime.lang || 'Phụ Đề'}
                     </span>
                   </>
                 )}

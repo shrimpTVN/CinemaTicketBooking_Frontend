@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import apiClient from '../services/apiClient';
-import { USE_MOCK } from '../services/apiConfig';
+import { USE_MOCK, API_URL } from '../services/apiConfig';
 import { useAuthStore } from './authStore';
+import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
+
+let stompClient = null;
 
 /* ═══════════════════════════════════════════════════════════════════════
    ROOM CONFIGURATIONS
@@ -169,6 +173,7 @@ export const useBookingStore = create((set, get) => ({
   layout: {}, // Map của { seatId: { id, row, col, type, status, price } }
   roomConfig: ROOM_CONFIGS['Phòng 1'], // Cấu hình phòng chiếu hiện tại
   selectedSeats: [], // Mảng các đối tượng ghế đang chọn: { id, row, col, type, price }
+  orphanSeatIds: [], // Danh sách ID ghế mồ côi bị lỗi cần highlight
   ticketCount: 0, // Số lượng người/vé cần đặt (mặc định là 0)
   audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 },
   dbPrices: [],
@@ -177,14 +182,16 @@ export const useBookingStore = create((set, get) => ({
   
   // Timer States
   holdTimer: 300, // 5 phút (300 giây)
+  holdExpiresAt: null,
   holdIntervalId: null,
 
   // Setters
   setStep: (step) => set({ step }),
-  setMovie: (movie) => set({ movie, showtime: null, date: null, selectedSeats: [], combos: {}, audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 }, ticketCount: 0 }),
-  setDate: (date) => set({ date, showtime: null, selectedSeats: [], combos: {} }),
+  setOrphanSeatIds: (orphanSeatIds) => set({ orphanSeatIds }),
+  setMovie: (movie) => set({ movie, showtime: null, date: null, selectedSeats: [], orphanSeatIds: [], combos: {}, audienceSelection: { 'Người lớn': 0, 'U22': 0, 'Trẻ nhỏ': 0 }, ticketCount: 0 }),
+  setDate: (date) => set({ date, showtime: null, selectedSeats: [], orphanSeatIds: [], combos: {} }),
   setShowtime: async (showtime) => {
-    set({ showtime, selectedSeats: [], combos: {} });
+    set({ showtime, selectedSeats: [], orphanSeatIds: [], combos: {} });
     if (showtime) {
       await get().initLayout();
     }
@@ -192,7 +199,7 @@ export const useBookingStore = create((set, get) => ({
   setPayment: (payment) => set({ payment }),
   setCombos: (combos) => set({ combos }),
   setTicketCount: async (count) => {
-    set({ ticketCount: count });
+    set({ ticketCount: count, orphanSeatIds: [] });
     await get().initLayout();
   },
   setAudienceSelection: (selection) => {
@@ -366,11 +373,13 @@ export const useBookingStore = create((set, get) => ({
                 .map(t => t.id)
             : [5, 9]; // fallback IDs
 
-          // Create a lookup for showtime seat statuses
+          // Create a lookup for showtime seat statuses and who held them
           const showtimeSeatStatuses = {};
+          const showtimeSeatHolders = {};
           if (Array.isArray(dbShowtimeSeats)) {
             dbShowtimeSeats.forEach(sts => {
               showtimeSeatStatuses[sts.seatId] = sts.status;
+              showtimeSeatHolders[sts.seatId] = sts.holdBy;
             });
           }
 
@@ -414,18 +423,46 @@ export const useBookingStore = create((set, get) => ({
             heldSeats: []
           };
           
+          const restoredSelectedSeats = [];
+
           dbSeats.forEach(s => {
             // Bỏ qua ghế 'KO' hoặc ghế có loại là Lối đi (Walkway)
             if (s.rowLabel === 'KO' || walkwayTypeIds.includes(s.seatTypeId)) return;
             
             const type = typeMapping[s.seatTypeId] || 'normal';
             const beStatus = showtimeSeatStatuses[s.id] || s.status;
+            const holdBy = showtimeSeatHolders[s.id];
             let status = 'available';
             const statusUpper = (beStatus || '').toUpperCase();
+            
             if (statusUpper === 'SOLD' || statusUpper === 'OFF' || statusUpper === 'BOOKED') {
               status = 'booked';
             } else if (statusUpper === 'HELD') {
-              status = 'held';
+              const currentUser = useAuthStore.getState().user;
+              const currentUserId = currentUser?.id || 1;
+              const isHeldByOthers = holdBy && holdBy !== 0 && holdBy !== currentUserId;
+
+              if (isHeldByOthers) {
+                status = 'held';
+              } else if (holdBy === currentUserId || get().selectedSeats.some(sel => sel.dbId === s.id)) {
+                status = 'selected';
+                
+                // If held by current user in DB, ensure it's in selectedSeats
+                const alreadySelected = get().selectedSeats.some(sel => sel.dbId === s.id);
+                if (!alreadySelected) {
+                  const price = get().getSeatPriceForAudience(s.seatTypeId, 'Người lớn');
+                  restoredSelectedSeats.push({
+                    id: s.rowLabel + s.colNumber,
+                    dbId: s.id,
+                    row: s.rowLabel,
+                    col: s.colNumber,
+                    type,
+                    price: Number(price)
+                  });
+                }
+              } else {
+                status = 'held';
+              }
             }
 
             // Get dynamic price based on "Người lớn" as default display on map
@@ -442,7 +479,22 @@ export const useBookingStore = create((set, get) => ({
             };
           });
           
-          set({ layout: newLayout, selectedSeats: [], roomConfig });
+          // Giữ lại các ghế hợp lệ và tự động loại bỏ các ghế đã bị người khác giữ (HELD) hoặc đã bán (SOLD/BOOKED)
+          const currentUser = useAuthStore.getState().user;
+          const currentUserId = currentUser?.id || 1;
+
+          const validSelectedSeats = [
+            ...get().selectedSeats.filter(sel => {
+              const dbStatus = (showtimeSeatStatuses[sel.dbId] || '').toUpperCase();
+              const holdBy = showtimeSeatHolders[sel.dbId];
+              const isHeldByOthers = dbStatus === 'HELD' && holdBy && holdBy !== 0 && holdBy !== currentUserId;
+              const isUnavailable = dbStatus === 'SOLD' || dbStatus === 'OFF' || dbStatus === 'BOOKED' || isHeldByOthers;
+              return !isUnavailable;
+            }),
+            ...restoredSelectedSeats
+          ];
+          
+          set({ layout: newLayout, selectedSeats: validSelectedSeats, roomConfig });
           return;
         }
       } catch (error) {
@@ -469,7 +521,8 @@ export const useBookingStore = create((set, get) => ({
             if (mockSoldSeats.has(id)) {
               status = 'booked';
             } else if (mockHeldSeats.has(id)) {
-              status = 'held';
+              const isCurrentlySelectedByUser = get().selectedSeats.some(sel => sel.id === id);
+              status = isCurrentlySelectedByUser ? 'selected' : 'held';
             }
             newLayout[id] = {
               id,
@@ -488,7 +541,8 @@ export const useBookingStore = create((set, get) => ({
           if (mockSoldSeats.has(id)) {
             status = 'booked';
           } else if (mockHeldSeats.has(id)) {
-            status = 'held';
+            const isCurrentlySelectedByUser = get().selectedSeats.some(sel => sel.id === id);
+            status = isCurrentlySelectedByUser ? 'selected' : 'held';
           }
           newLayout[id] = {
             id,
@@ -502,12 +556,12 @@ export const useBookingStore = create((set, get) => ({
       }
     });
 
-    set({ layout: newLayout, selectedSeats: [], roomConfig: config });
+    set({ layout: newLayout, selectedSeats: get().selectedSeats, roomConfig: config });
   },
 
-  // Chọn/bỏ chọn ghế
-  toggleSeat: async (row, col, pushToast) => {
-    const { layout, selectedSeats, roomConfig, ticketCount, showtime } = get();
+  // Chọn/bỏ chọn ghế (Chọn tự do tại Bước 2, chỉ giữ trên Frontend; Backend giữ ghế khi bấm "Tiếp tục")
+  toggleSeat: (row, col, pushToast) => {
+    const { layout, selectedSeats, roomConfig, ticketCount } = get();
     const type = roomConfig.layout[row]?.type || 'normal';
     const id = `${row}${col}`;
     const seat = layout[id];
@@ -515,18 +569,6 @@ export const useBookingStore = create((set, get) => ({
     if (!seat || seat.status === 'booked' || seat.status === 'held') return;
 
     const isSelected = selectedSeats.some(s => s.id === id);
-    if (!isSelected && selectedSeats.length > 0) {
-      const activeType = selectedSeats[0].type;
-      if (activeType !== seat.type) {
-        const typeNames = { normal: 'Thường', vip: 'VIP', couple: 'Đôi' };
-        pushToast(`Bạn chỉ được chọn các ghế cùng loại ${typeNames[activeType] || activeType}!`, "warning");
-        return;
-      }
-    }
-
-    // get user ID from authStore
-    const user = useAuthStore.getState().user;
-    const userId = user?.id || 1;
 
     // Xử lý ghế đôi
     if (type === 'couple') {
@@ -551,60 +593,15 @@ export const useBookingStore = create((set, get) => ({
       if (!partner || partner.status === 'booked' || partner.status === 'held') return;
 
       if (isSelected) {
-        // Hủy chọn cả 2
-        if (!USE_MOCK && showtime) {
-          try {
-            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
-              seatIds: [seat.dbId, partner.dbId],
-              userId: userId
-            });
-          } catch (error) {
-            console.error("Failed to release seats:", error);
-            pushToast("Không thể giải phóng ghế đôi!", "error");
-            return;
-          }
-        }
-
         const nextSelected = selectedSeats.filter(s => s.id !== id && s.id !== partnerId);
         const nextLayout = { ...layout };
         nextLayout[id] = { ...nextLayout[id], status: 'available' };
         nextLayout[partnerId] = { ...nextLayout[partnerId], status: 'available' };
-        
         set({ selectedSeats: nextSelected, layout: nextLayout });
       } else {
-        // Chọn cả 2
         if (selectedSeats.length + 2 > ticketCount) {
           pushToast(`Số lượng vé (${ticketCount} ghế) không đủ để đặt cặp ghế đôi!`, "warning");
           return;
-        }
-
-        // Validate orphan rule
-        const tentativeSelected = new Set(selectedSeats.map(s => s.id));
-        tentativeSelected.add(id);
-        tentativeSelected.add(partnerId);
-
-        const prevSelected = new Set(selectedSeats.map(s => s.id));
-
-        // Chỉ kiểm tra luật ghế mồ côi khi đã chọn đủ số ghế (đạt đến ticketCount)
-        if (selectedSeats.length + 2 === ticketCount) {
-          if (createsNewOrphan(row, prevSelected, tentativeSelected, layout, roomConfig)) {
-            pushToast("Vui lòng không để trống 1 ghế đơn lẻ!", "warning");
-            return;
-          }
-        }
-
-        // Call backend hold API before setting state
-        if (!USE_MOCK && showtime) {
-          try {
-            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
-              seatIds: [seat.dbId, partner.dbId],
-              userId: userId
-            });
-          } catch (error) {
-            const msg = error.response?.data || error.message || "Không thể giữ ghế";
-            pushToast(typeof msg === 'string' ? msg : "Ghế đã được chọn hoặc giữ bởi người khác!", "error");
-            return;
-          }
         }
 
         const nextSelected = [
@@ -624,62 +621,13 @@ export const useBookingStore = create((set, get) => ({
       const nextLayout = { ...layout };
 
       if (isSelected) {
-        // Bỏ chọn
-        if (!USE_MOCK && showtime) {
-          try {
-            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
-              seatIds: [seat.dbId],
-              userId: userId
-            });
-          } catch (error) {
-            console.error("Failed to release seat:", error);
-            pushToast("Không thể giải phóng ghế!", "error");
-            return;
-          }
-        }
-
         const nextSelected = selectedSeats.filter(s => s.id !== id);
         nextLayout[id] = { ...nextLayout[id], status: 'available' };
-
         set({ selectedSeats: nextSelected, layout: nextLayout });
       } else {
-        // Chọn
         if (selectedSeats.length + 1 > ticketCount) {
           pushToast(`Bạn đã chọn đủ số lượng ghế (${ticketCount} ghế)!`, "warning");
           return;
-        }
-
-        const tentativeSelected = new Set(selectedSeats.map(s => s.id));
-        tentativeSelected.add(id);
-
-        const prevSelected = new Set(selectedSeats.map(s => s.id));
-
-        // Chỉ kiểm tra luật ghế mồ côi khi đã chọn đủ số ghế (đạt đến ticketCount)
-        if (selectedSeats.length + 1 === ticketCount) {
-          if (createsNewOrphan(row, prevSelected, tentativeSelected, layout, roomConfig)) {
-            pushToast("Vui lòng không để trống 1 ghế đơn lẻ!", "warning");
-            return;
-          }
-        }
-
-        // Call backend hold API before setting state
-        if (!USE_MOCK && showtime) {
-          try {
-            console.log(">>> [holdSeats] Calling hold API with:", {
-              showtimeId: showtime.id,
-              seatIds: [seat.dbId],
-              userId: userId
-            });
-            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
-              seatIds: [seat.dbId],
-              userId: userId
-            });
-          } catch (error) {
-            console.error(">>> [holdSeats] Hold API failed:", error);
-            const msg = error.response?.data || error.message || "Không thể giữ ghế";
-            pushToast(typeof msg === 'string' ? msg : "Ghế đã được chọn hoặc giữ bởi người khác!", "error");
-            return;
-          }
         }
 
         const nextSelected = [...selectedSeats, { id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId }];
@@ -688,6 +636,92 @@ export const useBookingStore = create((set, get) => ({
         set({ selectedSeats: nextSelected, layout: nextLayout });
       }
     }
+  },
+
+  // Chọn/bỏ chọn cụm ghế (Block Selection)
+  toggleSeatBlock: async (seatsToToggle, pushToast) => {
+    if (!Array.isArray(seatsToToggle) || seatsToToggle.length === 0) return;
+    const { layout, selectedSeats, ticketCount, showtime } = get();
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 1;
+
+    const validSeats = seatsToToggle.filter((s) => s && s.status !== 'booked' && s.status !== 'held');
+    if (validSeats.length === 0) return;
+
+    const unselectedSeats = validSeats.filter((s) => !selectedSeats.some((sel) => sel.id === s.id));
+    if (unselectedSeats.length > 0) {
+      if (selectedSeats.length + unselectedSeats.length > ticketCount) {
+        pushToast(`Số lượng vé đã chọn (${ticketCount} ghế) không đủ để chọn cụm ${unselectedSeats.length} ghế!`, "warning");
+        return;
+      }
+
+      const dbIdsToHold = unselectedSeats.map((s) => s.dbId).filter(Boolean);
+      if (!USE_MOCK && showtime && dbIdsToHold.length > 0) {
+        try {
+          await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
+            seatIds: dbIdsToHold,
+            userId: userId
+          });
+        } catch (error) {
+          const msg = error.response?.data || error.message || "Không thể giữ cụm ghế!";
+          pushToast(typeof msg === 'string' ? msg : "Một số ghế trong cụm đã được giữ bởi người khác!", "error");
+          return;
+        }
+      }
+
+      const newObjects = unselectedSeats.map((s) => ({
+        id: s.id,
+        row: s.row,
+        col: s.col,
+        type: s.type,
+        price: s.price,
+        dbId: s.dbId
+      }));
+
+      const nextSelected = [...selectedSeats, ...newObjects];
+      const nextLayout = { ...layout };
+      unselectedSeats.forEach((s) => {
+        if (nextLayout[s.id]) {
+          nextLayout[s.id] = { ...nextLayout[s.id], status: 'selected' };
+        }
+      });
+
+      set({ selectedSeats: nextSelected, layout: nextLayout });
+    }
+  },
+
+  // Bỏ chọn nguyên cụm ghế (Block Deselection)
+  releaseSeatBlock: async (seatsToRelease, pushToast) => {
+    if (!Array.isArray(seatsToRelease) || seatsToRelease.length === 0) return;
+    const { layout, selectedSeats, showtime } = get();
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 1;
+
+    const releaseIds = new Set(seatsToRelease.map((s) => s.id));
+    const dbIdsToRelease = seatsToRelease.map((s) => s.dbId).filter(Boolean);
+
+    if (!USE_MOCK && showtime && dbIdsToRelease.length > 0) {
+      try {
+        await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+          seatIds: dbIdsToRelease,
+          userId: userId
+        });
+      } catch (error) {
+        console.error("Failed to release seat block:", error);
+        if (pushToast) pushToast("Không thể bỏ chọn cụm ghế!", "error");
+        return;
+      }
+    }
+
+    const nextSelected = selectedSeats.filter((s) => !releaseIds.has(s.id));
+    const nextLayout = { ...layout };
+    releaseIds.forEach((id) => {
+      if (nextLayout[id]) {
+        nextLayout[id] = { ...nextLayout[id], status: 'available' };
+      }
+    });
+
+    set({ selectedSeats: nextSelected, layout: nextLayout });
   },
 
   // Reset rạp
@@ -717,23 +751,35 @@ export const useBookingStore = create((set, get) => ({
     set({ selectedSeats: [], layout: nextLayout });
   },
 
-  // Countdown timer giữ ghế
-  startHoldTimer: (onExpired) => {
-    const { holdIntervalId } = get();
-    // Nếu timer đang chạy rồi thì không reset — chỉ tiếp tục đếm ngược
-    if (holdIntervalId) return;
+  // Countdown timer giữ ghế dựa trên mốc thời gian thực tế (tránh bị reset khi chuyển bước)
+  startHoldTimer: (onExpired, forceReset = false) => {
+    const { holdIntervalId, holdExpiresAt } = get();
+    if (holdIntervalId) {
+      clearInterval(holdIntervalId);
+    }
 
-    set({ holdTimer: 300 }); // Chỉ reset về 5 phút khi bắt đầu phiên mới
+    const now = Date.now();
+    let expiresAt = holdExpiresAt;
+
+    if (forceReset || !expiresAt || expiresAt <= now) {
+      expiresAt = now + 300 * 1000;
+    }
+
+    const remainingSecs = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+    set({ holdExpiresAt: expiresAt, holdTimer: remainingSecs });
 
     const intervalId = setInterval(() => {
-      const { holdTimer } = get();
-      if (holdTimer <= 1) {
+      const { holdExpiresAt: currentExpiresAt } = get();
+      const currentNow = Date.now();
+      const remaining = currentExpiresAt ? Math.max(0, Math.ceil((currentExpiresAt - currentNow) / 1000)) : 0;
+
+      if (remaining <= 0) {
         clearInterval(intervalId);
-        set({ holdTimer: 0, holdIntervalId: null });
+        set({ holdTimer: 0, holdExpiresAt: null, holdIntervalId: null });
         get().resetSelection();
         if (onExpired) onExpired();
       } else {
-        set({ holdTimer: holdTimer - 1 });
+        set({ holdTimer: remaining });
       }
     }, 1000);
 
@@ -744,14 +790,200 @@ export const useBookingStore = create((set, get) => ({
     const { holdIntervalId } = get();
     if (holdIntervalId) {
       clearInterval(holdIntervalId);
-      set({ holdIntervalId: null });
+      set({ holdIntervalId: null, holdExpiresAt: null, holdTimer: 300 });
     }
   },
 
-  // Giả lập đồng bộ thời gian thực qua WebSocket
+  // Đồng bộ thời gian thực qua WebSocket + Fallback Polling (3s)
   simulateRealtimeSync: () => {
-    // Đã tắt mô phỏng giữ ghế ngẫu nhiên thời gian thực để giữ dữ liệu mẫu cố định hợp lệ
-    return () => {};
+    const showtime = get().showtime;
+    if (!showtime) {
+      return () => {};
+    }
+
+    const fetchLatestSeats = async () => {
+      if (!showtime?.id || USE_MOCK) return;
+      try {
+        const res = await apiClient.get(`/showtime-seats/showtimes/${showtime.id}`);
+        const dbShowtimeSeats = res?.data || res || [];
+        if (!Array.isArray(dbShowtimeSeats)) return;
+
+        const { layout, selectedSeats } = get();
+        const currentUser = useAuthStore.getState().user;
+        const currentUserId = currentUser?.id || 1;
+        const selectedSet = new Set(selectedSeats.map(s => s.id));
+
+        const nextLayout = { ...layout };
+        let hasChange = false;
+
+        dbShowtimeSeats.forEach((sts) => {
+          const seatKey = Object.keys(nextLayout).find((key) => nextLayout[key].dbId === sts.seatId);
+          if (seatKey) {
+            const stsStatus = (sts.status || '').toUpperCase();
+            let targetStatus = 'available';
+
+            if (stsStatus === 'SOLD' || stsStatus === 'OFF' || stsStatus === 'BOOKED') {
+              targetStatus = 'booked';
+            } else if (stsStatus === 'HELD') {
+              const holdBy = sts.holdBy ?? sts.heldByUserId;
+              if (holdBy === currentUserId || selectedSet.has(seatKey)) {
+                targetStatus = 'selected';
+              } else {
+                targetStatus = 'held';
+              }
+            }
+
+            if (nextLayout[seatKey].status !== targetStatus) {
+              nextLayout[seatKey] = { ...nextLayout[seatKey], status: targetStatus };
+              hasChange = true;
+            }
+          }
+        });
+
+        if (hasChange) {
+          set({ layout: nextLayout });
+        }
+      } catch (err) {
+        console.warn('[RealtimeSync] Polling error:', err);
+      }
+    };
+
+    fetchLatestSeats();
+
+    let pollInterval = null;
+
+    const startFallbackPolling = () => {
+      if (!pollInterval) {
+        console.warn('⚠️ [RealtimeSync] WebSocket gặp sự cố/ngắt kết nối, kích hoạt Polling 3s dự phòng...');
+        pollInterval = setInterval(fetchLatestSeats, 3000);
+      }
+    };
+
+    const stopFallbackPolling = () => {
+      if (pollInterval) {
+        console.log('✅ [RealtimeSync] WebSocket kết nối thành công, tắt Polling!');
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    };
+
+    let stompClientInstance = null;
+    let isClosedIntentionally = false;
+
+    try {
+      let wsBaseUrl = '/ws-cinema';
+      if (typeof window !== 'undefined') {
+        if (API_URL && API_URL.startsWith('http')) {
+          wsBaseUrl = API_URL.replace(/\/api\/?$/, '/ws-cinema');
+        } else {
+          wsBaseUrl = `${window.location.origin}/ws-cinema`;
+        }
+      }
+      const socket = new SockJS(wsBaseUrl);
+
+      stompClientInstance = new Client({
+        webSocketFactory: () => socket,
+        reconnectDelay: 5000,
+        heartbeatIncoming: 10000,
+        heartbeatOutgoing: 10000,
+        onConnect: () => {
+          stopFallbackPolling();
+          console.log('✅ Connected to WebSocket for showtime:', showtime.id);
+
+          stompClientInstance.subscribe(`/topic/showtimes/${showtime.id}/seats`, (message) => {
+            try {
+              const event = JSON.parse(message.body);
+              console.log('>>> Received seat update event:', event);
+
+              if (event && Array.isArray(event.seatIds) && event.seatIds.length > 0) {
+                const { layout, selectedSeats } = get();
+                const currentUser = useAuthStore.getState().user;
+                const currentUserId = currentUser?.id || 1;
+                const eventUserId = event.userId;
+                const eventStatus = (event.status || '').toUpperCase();
+
+                const seatIdSet = new Set(event.seatIds);
+                const nextLayout = { ...layout };
+                let hasChange = false;
+
+                Object.keys(nextLayout).forEach((key) => {
+                  const seat = nextLayout[key];
+                  if (seat && seatIdSet.has(seat.dbId)) {
+                    let targetStatus = 'available';
+
+                    if (eventStatus === 'SOLD' || eventStatus === 'OFF' || eventStatus === 'BOOKED') {
+                      targetStatus = 'booked';
+                    } else if (eventStatus === 'HELD') {
+                      if (eventUserId === currentUserId) {
+                        targetStatus = 'selected';
+                      } else {
+                        targetStatus = 'held';
+                      }
+                    } else if (eventStatus === 'AVAILABLE') {
+                      targetStatus = 'available';
+                    }
+
+                    if (seat.status !== targetStatus) {
+                      nextLayout[key] = { ...seat, status: targetStatus };
+                      hasChange = true;
+                    }
+                  }
+                });
+
+                if (hasChange) {
+                  // Tự động bỏ chọn khỏi selectedSeats nếu ghế bị người khác giữ/bán
+                  const updatedSelectedSeats = selectedSeats.filter((sel) => {
+                    const updatedSeat = nextLayout[sel.id];
+                    return updatedSeat && updatedSeat.status === 'selected';
+                  });
+
+                  set({ layout: nextLayout, selectedSeats: updatedSelectedSeats });
+                }
+              }
+            } catch (e) {
+              console.warn('[RealtimeSync] Error parsing WS event:', e);
+            }
+
+            // Đồng bộ thêm 1 lượt REST API ở background để đảm bảo dữ liệu luôn chính xác tuyệt đối
+            fetchLatestSeats();
+          });
+        },
+        onWebSocketClose: () => {
+          if (!isClosedIntentionally) {
+            startFallbackPolling();
+          }
+        },
+        onWebSocketError: (err) => {
+          if (!isClosedIntentionally) {
+            console.warn('[RealtimeSync] WebSocket error:', err);
+            startFallbackPolling();
+          }
+        },
+        onStompError: (frame) => {
+          if (!isClosedIntentionally) {
+            console.warn('STOMP broker error:', frame?.headers?.['message']);
+            startFallbackPolling();
+          }
+        }
+      });
+
+      stompClientInstance.activate();
+    } catch (err) {
+      if (!isClosedIntentionally) {
+        console.warn('WebSocket init failed, fallback to 3s polling:', err);
+        startFallbackPolling();
+      }
+    }
+
+    return () => {
+      isClosedIntentionally = true;
+      stopFallbackPolling();
+      if (stompClientInstance) {
+        try {
+          stompClientInstance.deactivate();
+        } catch (e) {}
+      }
+    };
   },
 
   resetStore: () => {

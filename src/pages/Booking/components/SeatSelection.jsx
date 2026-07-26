@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback, memo } from '
 import { createPortal } from 'react-dom';
 import { Minus, Plus } from 'lucide-react';
 import { useBookingStore } from '../../../store/bookingStore';
-import { fmtVND } from '../bookingUtils';
+import { fmtVND, isSeatDisabledForCount, getBlockModesForTicketCount, findBestValidCandidateBlock, getActiveBlockSize } from '../bookingUtils';
 
 function SeatToast({ toasts }) {
   return (
@@ -236,13 +236,13 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
 });
 
 
-const SeatCell = memo(function SeatCell({ seat, selected, onToggle, displayNumber, zoom = 1.0 }) {
+const SeatCell = memo(function SeatCell({ seat, selected, previewSelected, isOrphan, disabled, onToggle, onMouseEnter, onMouseLeave, displayNumber, zoom = 1.0 }) {
   if (!seat) return null;
   const { id, row, col, type, status, price } = seat;
 
   const sizePx = Math.round(28 * zoom);
   const fontSizePx = Math.round(10 * zoom);
-  const iconSizePx = Math.round(14 * zoom);
+  const iconSizePx = Math.round(13 * zoom);
 
   const baseStyle = {
     width: `${sizePx}px`,
@@ -257,7 +257,7 @@ const SeatCell = memo(function SeatCell({ seat, selected, onToggle, displayNumbe
         <button
           disabled
           title={`Ghế ${id} đã được bán`}
-          className="rounded flex items-center justify-center bg-[#1C1C1C] border border-[#2D2D2D] text-zinc-700 cursor-not-allowed select-none"
+          className="rounded-lg flex items-center justify-center bg-[#1E1E24] border border-[#26262B] text-zinc-600 cursor-not-allowed select-none"
           style={baseStyle}
         >
           <svg style={{ width: `${iconSizePx}px`, height: `${iconSizePx}px` }} fill="currentColor" viewBox="0 0 24 24">
@@ -277,12 +277,12 @@ const SeatCell = memo(function SeatCell({ seat, selected, onToggle, displayNumbe
         <button
           disabled
           title={`Ghế ${id} đang được người khác giữ tạm`}
-          className="rounded flex items-center justify-center bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] cursor-not-allowed select-none animate-pulse"
+          className="rounded-lg flex items-center justify-center bg-[#221735] border border-[#8B5CF6]/70 text-[#C084FC] font-semibold cursor-not-allowed select-none relative shadow-[0_0_8px_rgba(139,92,246,0.25)]"
           style={baseStyle}
         >
-          <svg style={{ width: `${iconSizePx}px`, height: `${iconSizePx}px` }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <span>{displayNumber}</span>
+          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
+          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
         </button>
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-zinc-950/95 text-[10px] text-white px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-white/10 pointer-events-none z-50">
           Ghế {id} - Đang giữ tạm
@@ -291,31 +291,57 @@ const SeatCell = memo(function SeatCell({ seat, selected, onToggle, displayNumbe
     );
   }
 
-  // Use CSS marker classes: seat-avail on all available buttons,
-  // seat-sel on selected buttons. The .seats-maxed container class
-  // applies disabled styling via CSS without any React re-render.
-  let btnClasses = "seat-avail rounded flex items-center justify-center font-bold border transition-colors duration-100 select-none ";
+  if (disabled) {
+    return (
+      <div className="relative group">
+        <button
+          disabled
+          className="rounded-lg flex items-center justify-center bg-transparent border border-dashed border-zinc-600/60 cursor-not-allowed select-none opacity-40"
+          style={baseStyle}
+        />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-zinc-950/95 text-[10px] text-white px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-white/10 pointer-events-none z-50">
+          Ghế {id} - Không thể chọn
+        </div>
+      </div>
+    );
+  }
+
+  let btnClasses = "seat-avail rounded-lg flex items-center justify-center transition-all duration-100 select-none ";
+  let textStyle = {};
+
   if (selected) {
-    btnClasses += "seat-sel bg-[#0EA1CF] border-[#0EA1CF] text-zinc-950 active:opacity-80 cursor-pointer";
+    btnClasses += "seat-sel bg-[#0EA1CF] border-2 border-[#0EA1CF] text-zinc-950 font-black shadow-[0_0_12px_rgba(14,161,207,0.5)] active:opacity-80 cursor-pointer";
+    textStyle = { color: '#09090b', fontWeight: 900, opacity: 1 };
+  } else if (previewSelected) {
+    btnClasses += "bg-[#0EA1CF]/30 border-2 border-[#0EA1CF] text-white font-extrabold ring-2 ring-[#0EA1CF]/60 shadow-[0_0_12px_rgba(14,161,207,0.4)] cursor-pointer";
+    textStyle = { color: '#ffffff', fontWeight: 800, opacity: 1 };
+  } else if (isOrphan) {
+    btnClasses += "bg-amber-500/20 border-2 border-amber-500 text-amber-300 ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse cursor-pointer";
+    textStyle = { color: '#fcd34d', fontWeight: 800, opacity: 1 };
   } else {
     if (type === 'vip') {
-      btnClasses += "bg-amber-500/5 border-2 border-amber-500/35 text-amber-400 hover:bg-amber-500/15 active:bg-amber-500/25 cursor-pointer";
+      btnClasses += "bg-[#241A12] border-2 border-[#F59E0B]/70 text-[#F59E0B]/70 hover:border-[#F59E0B] hover:text-[#F59E0B] active:bg-[#F59E0B]/20 cursor-pointer font-semibold";
+      textStyle = { color: 'rgba(245, 158, 11, 0.75)', opacity: 0.75 };
     } else {
-      btnClasses += "bg-zinc-800/40 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700/60 active:bg-zinc-600/60 cursor-pointer";
+      btnClasses += "bg-[#16141D] border-2 border-[#332A3B] text-zinc-400/60 hover:border-zinc-500 hover:text-zinc-200 active:bg-zinc-800/60 cursor-pointer font-medium";
+      textStyle = { color: 'rgba(156, 163, 175, 0.6)', opacity: 0.6 };
     }
   }
 
   return (
     <div className="relative group">
       <button
+        disabled={disabled}
         onClick={() => onToggle(row, col)}
+        onMouseEnter={() => onMouseEnter && onMouseEnter(row, col)}
+        onMouseLeave={() => onMouseLeave && onMouseLeave()}
         className={btnClasses}
         style={baseStyle}
       >
-        {displayNumber}
+        <span style={textStyle}>{displayNumber}</span>
       </button>
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-zinc-950/95 text-[10px] text-white px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-white/10 pointer-events-none z-50">
-        Ghế {id} - {type === 'vip' ? 'VIP' : 'Thường'} - {fmtVND(price)}
+        {`Ghế ${id} - ${type === 'vip' ? 'VIP' : 'Thường'} - ${fmtVND(price)}`}
       </div>
     </div>
   );
@@ -342,7 +368,6 @@ const CoupleSeatCell = memo(function CoupleSeatCell({
   const idL = `${row}${leftCol}`;
   const idR = `${row}${rightCol}`;
 
-  // Single wide button spanning exactly 2 seat-widths + 1 inter-seat gap
   const btnWidth = 2 * seatSizePx + gapPx;
   const btnStyle = {
     width: `${btnWidth}px`,
@@ -360,7 +385,7 @@ const CoupleSeatCell = memo(function CoupleSeatCell({
         disabled
         style={btnStyle}
         title={`Ghế đôi ${idL}-${idR} - Đã bán`}
-        className="rounded flex items-center justify-center bg-[#1C1C1C] border border-[#2D2D2D] text-zinc-700 cursor-not-allowed select-none"
+        className="rounded-lg flex items-center justify-center bg-[#1E1E24] border border-[#26262B] text-zinc-600 cursor-not-allowed select-none"
       >
         <svg style={{ width: `${iconSizePx}px`, height: `${iconSizePx}px` }} fill="currentColor" viewBox="0 0 24 24">
           <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
@@ -375,22 +400,27 @@ const CoupleSeatCell = memo(function CoupleSeatCell({
         disabled
         style={btnStyle}
         title={`Ghế đôi ${idL}-${idR} - Đang giữ tạm`}
-        className="rounded flex items-center justify-center bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] cursor-not-allowed select-none animate-pulse"
+        className="rounded-lg flex items-center justify-around bg-[#221735] border border-[#8B5CF6]/70 text-[#C084FC] font-semibold cursor-not-allowed select-none relative shadow-[0_0_8px_rgba(139,92,246,0.25)]"
       >
-        <svg style={{ width: `${iconSizePx}px`, height: `${iconSizePx}px` }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <span>{displayNumberL}</span>
+        <span>{displayNumberR}</span>
+        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
+        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
       </button>
     );
   }
 
-  let btnClass = "rounded flex items-center justify-around font-bold border transition-colors duration-100 select-none ";
+  let btnClass = "rounded-lg flex items-center justify-around transition-colors duration-100 select-none ";
+  let textStyle = {};
+
   if (selected) {
-    btnClass += "bg-[#0EA1CF] border-[#0EA1CF] text-zinc-950 active:opacity-80 cursor-pointer";
+    btnClass += "bg-[#0EA1CF] border-2 border-[#0EA1CF] text-zinc-950 font-black shadow-[0_0_12px_rgba(14,161,207,0.5)] active:opacity-80 cursor-pointer";
+    textStyle = { color: '#09090b', fontWeight: 900, opacity: 1 };
   } else if (disabled) {
-    btnClass += "bg-zinc-800/20 border-zinc-900/40 text-zinc-500 opacity-30 cursor-not-allowed";
+    btnClass += "bg-transparent border border-dashed border-zinc-600/60 opacity-40 cursor-not-allowed";
   } else {
-    btnClass += "bg-[#CF0F47]/5 border border-[#CF0F47]/30 text-[#CF0F47] hover:bg-[#CF0F47]/15 active:bg-[#CF0F47]/25 cursor-pointer";
+    btnClass += "bg-[#26121F] border-2 border-[#EC4899]/70 text-[#EC4899]/70 hover:border-[#EC4899] hover:text-[#EC4899] active:bg-[#EC4899]/20 cursor-pointer font-semibold";
+    textStyle = { color: 'rgba(236, 72, 153, 0.75)', opacity: 0.75 };
   }
 
   return (
@@ -401,8 +431,8 @@ const CoupleSeatCell = memo(function CoupleSeatCell({
       style={btnStyle}
       title={`Ghế đôi ${idL}-${idR}`}
     >
-      <span>{displayNumberL}</span>
-      <span>{displayNumberR}</span>
+      <span style={textStyle}>{displayNumberL}</span>
+      <span style={textStyle}>{displayNumberR}</span>
     </button>
   );
 });
@@ -412,6 +442,8 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
     layout,
     selectedSeats,
     toggleSeat,
+    toggleSeatBlock,
+    releaseSeatBlock,
     simulateRealtimeSync,
     roomConfig,
     ticketCount,
@@ -420,8 +452,27 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
     setAudienceSelection,
   } = useBookingStore();
 
-  const [zoom, setZoom] = useState(1.0);
+  const [zoom, setZoom] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 0.75 : 1.0));
   const hasAutoZoomedRef = useRef(false);
+
+  // Lotte Cinema Block Modes
+  const blockModes = useMemo(() => getBlockModesForTicketCount(ticketCount), [ticketCount]);
+  const [selectedBlockSize, setSelectedBlockSize] = useState(2);
+  const [hoveredBlockIds, setHoveredBlockIds] = useState(new Set());
+
+  const targetBlockSize = useMemo(() => {
+    return getActiveBlockSize(ticketCount, selectedSeats.length, selectedBlockSize);
+  }, [ticketCount, selectedSeats.length, selectedBlockSize]);
+
+  // Auto update selectedBlockSize when ticketCount or blockModes change
+  useEffect(() => {
+    if (blockModes.length > 0) {
+      const exists = blockModes.some((m) => m.size === selectedBlockSize);
+      if (!exists) {
+        setSelectedBlockSize(blockModes[0].size);
+      }
+    }
+  }, [ticketCount, blockModes, selectedBlockSize]);
 
   useEffect(() => {
     const cleanup = simulateRealtimeSync();
@@ -445,22 +496,16 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
     return max;
   }, [roomConfig]);
 
-  // Auto-zoom to fit mobile screen width on load
+  // Auto-zoom on load: 1.0 (100%) for PC/Desktop (>= 768px), 0.75 (75%) for Mobile (< 768px)
   useEffect(() => {
-    if (maxColsInLayout > 0 && !hasAutoZoomedRef.current) {
+    if (typeof window !== 'undefined') {
       if (window.innerWidth < 768) {
-        // approximate width of the seat block: columns * 32px (seat+gap) + row labels + padding
-        const approximateSeatBlockWidth = maxColsInLayout * 32 + 70;
-        const containerWidth = window.innerWidth - 32;
-        if (approximateSeatBlockWidth > containerWidth) {
-          const ratio = Math.max(0.55, Math.min(1.0, containerWidth / approximateSeatBlockWidth));
-          // Round to nearest 0.05
-          setZoom(Math.round(ratio * 20) / 20);
-        }
+        setZoom(0.75);
+      } else {
+        setZoom(1.0);
       }
-      hasAutoZoomedRef.current = true;
     }
-  }, [maxColsInLayout]);
+  }, []);
 
   const ALL_COLS = useMemo(() => {
     return Array.from({ length: maxColsInLayout }, (_, i) => maxColsInLayout - i);
@@ -498,23 +543,96 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
         const c1 = sortedCols[i];
         const c2 = sortedCols[i + 1];
         if (c1 !== undefined && c2 !== undefined) {
-          pairs[row].push([c2, c1]); // Left is larger (c2), Right is smaller (c1)
+          pairs[row].push([c2, c1]);
         }
       }
     });
     return pairs;
   }, [roomConfig]);
 
-  // Sync component booking state when selectedSeats changes
-  useEffect(() => {
-    setBooking((b) => ({ ...b, seats: selectedSeats }));
-  }, [selectedSeats, setBooking]);
+  const rowSeatsMap = useMemo(() => {
+    const map = {};
+    roomConfig.rows.forEach((row) => {
+      const rowLayout = roomConfig.layout[row];
+      if (!rowLayout) return;
+      const type = rowLayout.type || 'normal';
+      const isVIPRow = type === 'vip';
+      const cols = rowLayout.cols;
+      const sortedCols = [...cols].sort((a, b) => b - a);
 
-  // Stable toggle handler to keep SeatCell/CoupleSeatCell memo references unchanged
+      const list = [];
+      sortedCols.forEach((c, idx) => {
+        const seatObj = layout[`${row}${c}`] || { id: `${row}${c}`, row, col: c, status: 'available' };
+        list.push(seatObj);
+        const nextCol = sortedCols[idx + 1];
+        const isColGap = nextCol !== undefined && Math.abs(c - nextCol) > 1;
+        const hasAisle = roomConfig.aisles.includes(c) || (roomConfig.centerAisle === c && !isVIPRow) || isColGap;
+        if (hasAisle) {
+          list.push({ id: `walkway-${row}-${c}`, row, col: `walkway-${c}`, type: 'walkway', status: 'available' });
+        }
+      });
+      map[row] = list;
+    });
+    return map;
+  }, [roomConfig, layout]);
+
+  // Block Hover Handler (Bo pass hover calculation on mobile touch screens)
+  const handleMouseEnter = useCallback((row, col) => {
+    if (window.matchMedia && !window.matchMedia('(hover: hover)').matches) return;
+    const rowSeats = rowSeatsMap[row] || [];
+    const seatObj = layout[`${row}${col}`];
+    if (!seatObj || seatObj.status === 'booked' || seatObj.status === 'held') {
+      setHoveredBlockIds(new Set());
+      return;
+    }
+    const colIdx = rowSeats.findIndex((s) => s.id === seatObj.id);
+    if (colIdx === -1) return;
+
+    if (selectedIds.has(seatObj.id)) {
+      let startIdx = colIdx;
+      while (startIdx > 0 && selectedIds.has(rowSeats[startIdx - 1]?.id)) {
+        startIdx--;
+      }
+      let endIdx = colIdx;
+      while (endIdx < rowSeats.length - 1 && selectedIds.has(rowSeats[endIdx + 1]?.id)) {
+        endIdx++;
+      }
+      setHoveredBlockIds(new Set(rowSeats.slice(startIdx, endIdx + 1).map((s) => s.id)));
+      return;
+    }
+
+    const activeSize = targetBlockSize || 1;
+    if (activeSize <= 1) {
+      setHoveredBlockIds(new Set());
+      return;
+    }
+
+    const candidate = findBestValidCandidateBlock(colIdx, activeSize, rowSeats, selectedIds);
+    if (candidate && candidate.length > 0) {
+      setHoveredBlockIds(new Set(candidate.map((s) => s.id)));
+      return;
+    }
+    setHoveredBlockIds(new Set());
+  }, [layout, rowSeatsMap, selectedIds, targetBlockSize]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (window.matchMedia && !window.matchMedia('(hover: hover)').matches) return;
+    setHoveredBlockIds(new Set());
+  }, []);
+
+  const orphanSeatIds = useBookingStore((s) => s.orphanSeatIds) || [];
+  const setOrphanSeatIds = useBookingStore((s) => s.setOrphanSeatIds);
+
   const handleToggle = useCallback((row, col) => {
-    toggleSeat(row, col, pushToast);
-  }, [toggleSeat, pushToast]);
+    const seatObj = layout[`${row}${col}`];
+    if (!seatObj || seatObj.status === 'booked' || seatObj.status === 'held') return;
 
+    if (orphanSeatIds.length > 0) {
+      setOrphanSeatIds([]);
+    }
+
+    toggleSeat(row, col, pushToast);
+  }, [layout, orphanSeatIds, setOrphanSeatIds, toggleSeat, pushToast]);
   // Dynamic values based on zoom level
   const rowLabelWidthPx = Math.round(20 * zoom);
   const rowLabelFontSizePx = Math.round(11 * zoom);
@@ -572,42 +690,44 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
 
         {/* Seat Selection Grid */}
         <div className="w-full pt-6 pb-6 text-center flex flex-col items-center" style={{ background: '#0F0F0F' }}>
-          {/* Audience selection panel - Horizontal Row */}
-          <div className="mb-6 w-[calc(100%-2.5rem)] max-w-4xl bg-zinc-900/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/8 shadow-xl shadow-black/20 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
-            {/* Header Title */}
-            <div className="text-left">
-              <span className="text-zinc-400 text-[10px] font-extrabold uppercase tracking-wider block">Chọn loại vé &amp; Số lượng</span>
-              <span className="text-zinc-500 text-[9px] block mt-0.5">
-                Tối đa 8 người | Tổng: <span className="text-[#CF0F47] font-bold">{ticketCount} vé</span>
-              </span>
-            </div>
+          {/* Audience selection panel & Lotte Cinema "Chọn ghế liền nhau" Bar */}
+          <div className="mb-6 w-[calc(100%-2.5rem)] max-w-4xl bg-zinc-900/60 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/8 shadow-xl shadow-black/20 flex flex-col gap-4 relative z-30">
+            {/* Top row: Ticket Count dropdowns */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="text-left">
+                <span className="text-zinc-400 text-[10px] font-extrabold uppercase tracking-wider block">Chọn loại vé &amp; Số lượng</span>
+                <span className="text-zinc-500 text-[9px] block mt-0.5">
+                  Tối đa 8 người | Tổng: <span className="text-[#CF0F47] font-bold">{ticketCount} vé</span>
+                </span>
+              </div>
 
-            {/* Inline ticket types selector */}
-            <div className="flex flex-wrap items-center gap-4 flex-1 md:justify-end">
-              {Object.keys(audienceSelection).map((audType) => {
-                const audCount = audienceSelection[audType] || 0;
-                const desc = audType === 'Người lớn' ? 'Khách từ 18 tuổi' : audType === 'U22' ? 'Khách từ 6-22 tuổi' : 'Trẻ em từ 3-5 tuổi';
-                const maxForThisType = 8 - (ticketCount - audCount);
+              <div className="flex flex-wrap items-center gap-4 flex-1 md:justify-end">
+                {Object.keys(audienceSelection).map((audType) => {
+                  const audCount = audienceSelection[audType] || 0;
+                  const desc = audType === 'Người lớn' ? 'Khách từ 18 tuổi' : audType === 'U22' ? 'Khách từ 6-22 tuổi' : 'Trẻ em từ 3-5 tuổi';
+                  const maxForThisType = 8 - (ticketCount - audCount);
 
-                return (
-                  <div key={audType} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-zinc-950/20 px-3 py-1.5 rounded-xl border border-white/4">
-                    <div className="text-left pr-1">
-                      <span className="text-white text-xs font-bold block leading-tight">{audType}</span>
-                      <span className="text-[9px] text-zinc-500 block leading-normal">{desc}</span>
+                  return (
+                    <div key={audType} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-zinc-950/20 px-3 py-1.5 rounded-xl border border-white/4">
+                      <div className="text-left pr-1">
+                        <span className="text-white text-xs font-bold block leading-tight">{audType}</span>
+                        <span className="text-[9px] text-zinc-500 block leading-normal">{desc}</span>
+                      </div>
+
+                      <CustomDropdown
+                        value={audCount}
+                        max={maxForThisType}
+                        onChange={(val) => {
+                          const nextSelection = { ...audienceSelection, [audType]: val };
+                          setAudienceSelection(nextSelection);
+                        }}
+                      />
                     </div>
-
-                    <CustomDropdown
-                      value={audCount}
-                      max={maxForThisType}
-                      onChange={(val) => {
-                        const nextSelection = { ...audienceSelection, [audType]: val };
-                        setAudienceSelection(nextSelection);
-                      }}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+
           </div>
 
           {/* Swipe gesture tip for mobile */}
@@ -687,6 +807,8 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
                                   <SeatCell
                                     seat={layout[`${row}${col}`]}
                                     selected={selectedIds.has(`${row}${col}`)}
+                                    isOrphan={orphanSeatIds.includes(`${row}${col}`)}
+                                    disabled={false}
                                     onToggle={handleToggle}
                                     displayNumber={seatDisplayNumbers[row]?.[col] || col}
                                     zoom={zoom}
@@ -708,44 +830,60 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="w-full px-5">
-            <div className="flex flex-wrap items-center gap-5 mt-4 justify-center select-none">
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded border bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.15)]" />
-                <span className="text-zinc-500 text-xs">Thường</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded border bg-[rgba(251,191,36,0.05)] border-[rgba(251,191,36,0.25)]" />
-                <span className="text-zinc-500 text-xs">VIP</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-7 h-5 rounded border bg-[rgba(207,15,71,0.05)] border-[rgba(207,15,71,0.25)]" />
-                <span className="text-zinc-500 text-xs">Couple</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded bg-[#0EA1CF]" />
-                <span className="text-zinc-500 text-xs">Đang chọn</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded border bg-[#1C1C1C] border-[#2D2D2D] flex items-center justify-center text-zinc-700">
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
-                  </svg>
+          {/* Legend Matching Design System */}
+          <div className="w-full px-5 max-w-4xl mx-auto mt-6">
+            <div className="bg-zinc-950/70 border border-white/8 rounded-2xl p-5 md:p-6 backdrop-blur-md shadow-2xl">
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-4 md:gap-6 items-start justify-items-center select-none text-center">
+                {/* 1. Thường */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#16141D] border-2 border-[#332A3B]" />
+                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Thường</span>
                 </div>
-                <span className="text-zinc-500 text-xs">Đã bán</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded border bg-[#252525] border-[#3A3A3A]/40 flex items-center justify-center text-zinc-500/60 p-0.5">
-                  <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+
+                {/* 2. VIP */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#241A12] border-2 border-[#F59E0B]/70" />
+                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">VIP</span>
                 </div>
-                <span className="text-zinc-500 text-xs">Không được chọn</span>
+
+                {/* 3. Couple */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#26121F] border-2 border-[#EC4899]/70" />
+                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Couple</span>
+                </div>
+
+                {/* 4. Đang chọn */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#0EA1CF] border-2 border-[#0EA1CF] shadow-[0_0_10px_rgba(14,161,207,0.5)]" />
+                  <span className="text-sky-400 text-xs font-bold leading-tight min-h-[32px] flex items-center justify-center">Đang chọn</span>
+                </div>
+
+                {/* 5. Đang giữ tạm */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#221735] border-2 border-[#8B5CF6]/70 relative shadow-[0_0_8px_rgba(139,92,246,0.25)]">
+                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
+                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
+                  </div>
+                  <span className="text-purple-300 font-semibold text-xs leading-tight min-h-[32px] flex items-center justify-center">Đang giữ tạm</span>
+                </div>
+
+                {/* 6. Đã bán */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#1E1E24] border border-[#26262B] flex items-center justify-center text-zinc-600">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Đã bán</span>
+                </div>
+
+                {/* 7. Không được chọn */}
+                <div className="flex flex-col items-center gap-2.5 w-full">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-transparent border-2 border-dashed border-zinc-600/60 opacity-60" />
+                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Không được chọn</span>
+                </div>
               </div>
             </div>
-
-
           </div>
         </div>
       </div>

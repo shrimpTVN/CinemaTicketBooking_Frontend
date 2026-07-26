@@ -12,6 +12,7 @@ import ShowtimeSelector from './components/ShowtimeSelector';
 import ReviewSection from './components/ReviewSection';
 import ReviewForm from './components/ReviewForm';
 import { useAuthStore } from '../../store/authStore';
+import FilmReelLoader from '../../components/FilmReelLoader';
 
 const renderStars = (ratingCount, sizeClass = "w-4 h-4") => {
   return (
@@ -167,9 +168,41 @@ export default function MovieDetail() {
       params: {
         movieId: movie.id
       }
-    }).then(res => {
+    }).then(async (res) => {
       const data = res?.data || res || [];
-      setAllMovieShowtimes(data);
+      if (data.length === 0) {
+        setAllMovieShowtimes([]);
+        setHasNoShowtimes(true);
+        setDates([]);
+        return;
+      }
+
+      // Fetch real seat counts for each showtime
+      const enrichedData = await Promise.all(
+        data.map(async (st) => {
+          try {
+            const seatRes = await apiClient.get(`/showtime-seats/showtimes/${st.id}`);
+            const seatData = Array.isArray(seatRes) ? seatRes : (seatRes?.data || []);
+            if (seatData.length > 0) {
+              const availableCount = seatData.filter((s) => (s.status || '').toUpperCase() === 'AVAILABLE').length;
+              return {
+                ...st,
+                availableCount,
+                totalCount: seatData.length
+              };
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch seat count for showtime ${st.id}`, e);
+          }
+          return {
+            ...st,
+            availableCount: 80,
+            totalCount: 100
+          };
+        })
+      );
+
+      setAllMovieShowtimes(enrichedData);
 
       if (data.length === 0) {
         setHasNoShowtimes(true);
@@ -271,11 +304,7 @@ export default function MovieDetail() {
   };
 
   if (loading) {
-    return (
-      <div className="bg-bg-dark text-text-main min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cta"></div>
-      </div>
-    );
+    return <FilmReelLoader fullScreen size="lg" text="Đang tải thông tin phim..." />;
   }
 
   if (error || !movie) {
@@ -353,12 +382,23 @@ export default function MovieDetail() {
     });
 
     sortedDbShowtimes.forEach(st => {
-      const isLồngTiếng = st.type.includes('Lồng Tiếng') || st.type.includes('Lòng tiếng');
-      const formatLabel = `${st.hallName.includes('IMAX') ? 'IMAX' : '2D'} ${isLồngTiếng ? 'Lồng Tiếng' : 'Phụ Đề'}`;
+      const typeLower = (st.type || '').toLowerCase();
+      let lang = 'Phụ Đề';
+      if (typeLower.includes('lồng tiếng') || typeLower.includes('lòng tiếng')) {
+        lang = 'Lồng Tiếng';
+      } else if (typeLower.includes('thuyết minh')) {
+        lang = 'Thuyết Minh';
+      }
+
+      const isImax = (st.hallName && st.hallName.toUpperCase().includes('IMAX')) || typeLower.includes('imax');
+      const is3D = typeLower.includes('3d');
+      const format = isImax ? 'IMAX' : (is3D ? '3D' : '2D');
+
+      const formatLabel = `${format} ${lang}`;
       if (!groups[formatLabel]) {
         groups[formatLabel] = {
           name: formatLabel,
-          price: st.hallName.includes('IMAX') ? 'Từ 140.000đ' : 'Từ 85.000đ',
+          price: isImax ? 'Từ 140.000đ' : (is3D ? 'Từ 110.000đ' : 'Từ 85.000đ'),
           times: []
         };
       }
@@ -369,12 +409,13 @@ export default function MovieDetail() {
       const endH = String(Math.floor(totalMinutes / 60) % 24).padStart(2, '0');
       const endM = String(totalMinutes % 60).padStart(2, '0');
 
-      if (!groups[formatLabel].times.some(t => t.start === timeStr)) {
+      if (!groups[formatLabel].times.some(t => t.start === timeStr && t.room === st.hallName)) {
         groups[formatLabel].times.push({
           id: st.id,
           start: timeStr,
           end: `${endH}:${endM}`,
-          available: 80,
+          available: st.availableCount ?? 80,
+          total: st.totalCount ?? 100,
           room: st.hallName
         });
       }

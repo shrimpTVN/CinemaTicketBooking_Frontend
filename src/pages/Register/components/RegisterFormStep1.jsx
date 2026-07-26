@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../../store/authStore';
+import GoogleLoginButton from '../../../components/GoogleLoginButton';
 
 export default function RegisterFormStep1({ formData, errors, handleChange, handleNextStep, locationState }) {
+  const navigate = useNavigate();
+  const authLogin = useAuthStore((s) => s.login);
   const datePickerRef = useRef(null); // Hidden native date input for calendar
 
   // Local display state for DD/MM/YYYY typed format
@@ -163,18 +167,18 @@ export default function RegisterFormStep1({ formData, errors, handleChange, hand
       </div>
 
       {/* Continue with Google */}
-      <button
-        type="button"
-        className="w-full bg-[#333333]/50 hover:bg-[#3f3f3f]/60 text-white py-2 sm:py-3 border border-zinc-700/40 rounded-lg text-xs sm:text-body2 font-medium flex items-center justify-center gap-2 sm:gap-3 cursor-pointer light-cast-google select-none"
-      >
-        <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h4.01c2.34-2.16 3.69-5.32 3.69-8.75Z" />
-          <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-4.01-3.13c-1.12.75-2.54 1.19-3.95 1.19-3.05 0-5.63-2.06-6.55-4.83H1.31v3.23A12 12 0 0 0 12 24Z" />
-          <path fill="#FBBC05" d="M5.45 14.32a7.14 7.14 0 0 1 0-4.64V6.45H1.31a12 12 0 0 0 0 11.1l4.14-3.23Z" />
-          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.43-3.43A11.96 11.96 0 0 0 12 0 12 12 0 0 0 1.31 6.45l4.14 3.23c.92-2.77 3.5-4.83 6.55-4.83Z" />
-        </svg>
-        Tiếp tục với Google
-      </button>
+      <GoogleLoginButton
+        onSuccess={(data) => {
+          const user = data.user || data;
+          const token = data.token || 'cookie-managed-token';
+          authLogin(user, token);
+          const from = locationState?.from || '/';
+          navigate(from, { replace: true });
+        }}
+        onError={(msg) => {
+          console.error("Google Auth error:", msg);
+        }}
+      />
 
       {/* Link to Login */}
       <div className="text-center mt-4 sm:mt-5 text-[10px] sm:text-body3 text-[#C3C3C3] font-normal">

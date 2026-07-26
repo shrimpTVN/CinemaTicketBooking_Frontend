@@ -153,3 +153,30 @@ export const updateProfile = async (userId, profileData) => {
   const data = res?.data || res;
   return normalizeUser(data);
 };
+
+/**
+ * Đăng nhập bằng Google ID Token
+ * @param {string} googleToken - Token từ Google OAuth2
+ * @returns {Promise<Object>}
+ */
+export const googleLogin = async (googleToken) => {
+  if (USE_MOCK) {
+    return {
+      user: {
+        id: 100,
+        fullName: 'Google User',
+        email: 'google@example.com',
+        role: 'USER',
+      },
+      token: 'mock-google-token',
+    };
+  }
+
+  const res = await apiClient.post('/auth/google', { token: googleToken });
+  const data = res?.data || res;
+  return {
+    user: normalizeUser(data.user),
+    token: 'cookie-managed-token',
+  };
+};
+

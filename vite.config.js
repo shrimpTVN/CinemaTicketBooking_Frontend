@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    global: 'window',
+  },
   server: {
     host: true,
     allowedHosts: true, // Cho phép ngrok redirect sau thanh toán VNPay
@@ -15,6 +18,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+      },
+      '/ws-cinema': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        ws: true,
       }
     }
   },

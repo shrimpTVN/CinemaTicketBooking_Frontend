@@ -4,7 +4,7 @@ import { getNowShowing } from '../../services/movieService';
 import { useBookingStore } from '../../store/bookingStore';
 import { useAuthStore } from '../../store/authStore';
 import { ALL_DATES, SHOWTIMES } from './bookingConstants';
-import { formatTimer, generateVnPayUrl, fmtVND } from './bookingUtils';
+import { formatTimer, generateVnPayUrl, fmtVND, findOrphanSeats } from './bookingUtils';
 import { USE_MOCK } from '../../services/apiConfig';
 import apiClient from '../../services/apiClient';
 
@@ -16,7 +16,9 @@ import ComboSelection from './components/ComboSelection';
 import PaymentSelection from './components/PaymentSelection';
 import BookingSummary from './components/BookingSummary';
 import SuccessScreen from './components/SuccessScreen';
+import FailureScreen from './components/FailureScreen';
 import AgeRatingTag from '../../components/AgeRatingTag';
+import FilmReelLoader from '../../components/FilmReelLoader';
 
 export default function Booking() {
   const {
@@ -48,6 +50,7 @@ export default function Booking() {
   const [dateWindowStart, setDateWindowStart] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [stepLoading, setStepLoading] = useState(false);
+  const [validationModal, setValidationModal] = useState(null);
 
   // Transition loader between steps to hide progressive loading / fetching states
   const prevStepRef = useRef(step);
@@ -55,10 +58,23 @@ export default function Booking() {
     if (prevStepRef.current !== step) {
       setStepLoading(true);
       prevStepRef.current = step;
+      let raf1 = null;
+      let raf2 = null;
+
+      // Đợi giao diện bước mới mount, render và hoàn tất vẽ ít nhất 1 frame ảnh (double rAF) rồi mới tắt loader
       const timer = setTimeout(() => {
-        setStepLoading(false);
-      }, 700); // 700ms provides enough time for background network calls & images to start painting
-      return () => clearTimeout(timer);
+        raf1 = requestAnimationFrame(() => {
+          raf2 = requestAnimationFrame(() => {
+            setStepLoading(false);
+          });
+        });
+      }, 600);
+
+      return () => {
+        clearTimeout(timer);
+        if (raf1) cancelAnimationFrame(raf1);
+        if (raf2) cancelAnimationFrame(raf2);
+      };
     }
   }, [step]);
 
@@ -120,20 +136,31 @@ export default function Booking() {
             }
 
             if (!selectedShowtime) {
-              const format = location.state.format || '2D';
-              const isLồngTiếng = format.includes('Lồng Tiếng') || format.includes('Lòng tiếng');
+              const formatStr = location.state.format || '2D';
+              const formatLower = formatStr.toLowerCase();
+              let lang = 'Phụ Đề';
+              if (formatLower.includes('lồng tiếng') || formatLower.includes('lòng tiếng')) {
+                lang = 'Lồng Tiếng';
+              } else if (formatLower.includes('thuyết minh')) {
+                lang = 'Thuyết Minh';
+              }
+
+              const isImax = formatStr.includes('IMAX');
+              const is3D = formatStr.includes('3D');
+              const format = isImax ? 'IMAX' : (is3D ? '3D' : '2D');
+
               const timeParts = location.state.showtime.split(':');
               const startHour = parseInt(timeParts[0], 10);
               const startMin = timeParts[1] || '00';
               const endHour = String((startHour + 2) % 24).padStart(2, '0');
               selectedShowtime = {
                 id: location.state.showtimeId || `st-dynamic-${Date.now()}`,
-                format: format.includes('IMAX') ? 'IMAX' : '2D',
-                lang: isLồngTiếng ? 'Thuyết minh' : 'Phụ đề',
+                format: format,
+                lang: lang,
                 start: location.state.showtime,
                 end: `${endHour}:${startMin}`,
                 available: 78,
-                room: location.state.roomName || (format.includes('IMAX') ? 'Phòng IMAX' : 'Phòng 1'),
+                room: location.state.roomName || (format === 'IMAX' ? 'Phòng IMAX' : 'Phòng 1'),
                 hallId: location.state.hallId || 1,
               };
             }
@@ -162,10 +189,7 @@ export default function Booking() {
     });
   }, [preMovieId, location.state, setMovie, setDate, setShowtime, setStep, navigate]);
 
-  // Seat hold timer — unmount-only cleanup (prevents double-clear on step changes)
-  useEffect(() => {
-    return () => clearHoldTimer();
-  }, [clearHoldTimer]);
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
 
   // Seat hold timer — start once when entering step 3/4, stop when leaving, never reset on 3→4
   useEffect(() => {
@@ -174,11 +198,9 @@ export default function Booking() {
         holdTimerStartedRef.current = true;
         startHoldTimer(() => {
           holdTimerStartedRef.current = false;
-          pushToast("Đã hết thời gian giữ ghế tạm thời! Vui lòng chọn lại ghế.", "warning");
-          setStep(2);
-          // Refresh seat layout from BE so statuses are accurate after expiry
-          useBookingStore.getState().initLayout();
-        });
+          setActivePaymentModal(null);
+          setShowTimeoutModal(true);
+        }, false);
       }
     } else {
       if (holdTimerStartedRef.current) {
@@ -186,7 +208,7 @@ export default function Booking() {
         clearHoldTimer();
       }
     }
-  }, [step, startHoldTimer, clearHoldTimer, pushToast, setStep]);
+  }, [step, startHoldTimer, clearHoldTimer]);
 
   // Scroll to top on step change
   useEffect(() => {
@@ -196,21 +218,26 @@ export default function Booking() {
   // Handle VNPAY payment callback
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const vnpStatus = params.get('vnp_status');
+    const invoiceIdParam = params.get('invoiceId');
     const responseCode = params.get('vnp_ResponseCode');
     const txnRef = params.get('vnp_TxnRef');
+
+    const isSuccess = vnpStatus === 'success' || responseCode === '00';
+    const isFailure = vnpStatus === 'failure' || (responseCode && responseCode !== '00');
+    const rawInvoiceId = invoiceIdParam || txnRef;
     
-    if (responseCode && txnRef) {
-      const savedBookingStr = sessionStorage.getItem('pending_vnpay_booking');
-      if (savedBookingStr) {
-        try {
-          const savedBooking = JSON.parse(savedBookingStr);
-          
-          if (responseCode === '00') {
-            const invoiceId = parseInt(txnRef, 10);
+    if (rawInvoiceId && (isSuccess || isFailure)) {
+      if (isSuccess) {
+        const savedBookingStr = localStorage.getItem('pending_vnpay_booking');
+        if (savedBookingStr) {
+          try {
+            const savedBooking = JSON.parse(savedBookingStr);
+            const invoiceId = parseInt(rawInvoiceId, 10);
             
             const finalize = async () => {
               setStepLoading(true);
-              if (!USE_MOCK) {
+              if (!USE_MOCK && invoiceId) {
                 try {
                   await apiClient.post(`/invoices/change-status/${invoiceId}?status=PAID`);
                 } catch (error) {
@@ -218,9 +245,14 @@ export default function Booking() {
                 }
               }
               
-              // Restore state to store
+              // Restore state to store with Date object parsing
+              const restoredDate = savedBooking.date ? {
+                ...savedBooking.date,
+                dateObj: savedBooking.date.dateObj ? new Date(savedBooking.date.dateObj) : null
+              } : null;
+
               setMovie(savedBooking.movie);
-              setDate(savedBooking.date);
+              setDate(restoredDate);
               setShowtime(savedBooking.showtime);
               useBookingStore.setState({
                 selectedSeats: savedBooking.selectedSeats,
@@ -229,49 +261,59 @@ export default function Booking() {
                 step: 'success'
               });
               
-              sessionStorage.removeItem('pending_vnpay_booking');
+              sessionStorage.setItem('payment_redirect', 'true');
+              localStorage.removeItem('pending_vnpay_booking');
               setStepLoading(false);
               navigate('/booking', { replace: true });
             };
             finalize();
-          } else {
-            pushToast("Thanh toán VNPay thất bại! Vui lòng chọn phương thức khác hoặc thử lại.", "error");
-
-            // Set flag BEFORE state updates so the currentInvoice reset useEffect is suppressed
-            isRestoringVnpayRef.current = true;
-
-            // Restore booking state directly (bypass setShowtime to avoid resetting selectedSeats in store)
-            useBookingStore.setState({
-              movie: savedBooking.movie,
-              date: savedBooking.date,
-              showtime: savedBooking.showtime,
-              selectedSeats: savedBooking.selectedSeats,
-              combos: savedBooking.combos,
-              payment: savedBooking.payment || 'VNPAY',
-              step: 4
-            });
-
-            // Unset flag after React effects have settled
-            setTimeout(() => { isRestoringVnpayRef.current = false; }, 200);
-
-            sessionStorage.removeItem('pending_vnpay_booking');
+          } catch (e) {
+            console.error("Error parsing saved booking state", e);
+            pushToast("Lỗi đồng bộ dữ liệu thanh toán!", "error");
             navigate('/booking', { replace: true });
           }
-        } catch (e) {
-          console.error("Error parsing saved booking state", e);
-          pushToast("Lỗi đồng bộ dữ liệu thanh toán!", "error");
-          navigate('/booking', { replace: true });
         }
+      } else {
+        pushToast("Thanh toán VNPay thất bại! Vui lòng chọn phương thức khác hoặc thử lại.", "error");
+
+        // Đọc thông tin đặt vé từ localStorage để giải phóng ghế trên Backend ngay lập tức
+        const savedBookingStr = localStorage.getItem('pending_vnpay_booking');
+        if (savedBookingStr) {
+          try {
+            const savedBooking = JSON.parse(savedBookingStr);
+            const user = useAuthStore.getState().user;
+            if (!USE_MOCK && savedBooking.showtime && savedBooking.selectedSeats?.length > 0 && user) {
+              apiClient.post(`/showtime-seats/showtimes/${savedBooking.showtime.id}/release`, {
+                seatIds: savedBooking.selectedSeats.map(s => s.dbId),
+                userId: user.id
+              }).catch(err => console.error('[Failure Release] Failed to release seats:', err));
+            }
+          } catch (e) {
+            console.error("Error parsing saved booking state on failure", e);
+          }
+        }
+
+        // Set step to failure screen directly without needing to restore state
+        useBookingStore.setState({
+          step: 'failure'
+        });
+
+        sessionStorage.setItem('payment_redirect', 'true');
+        localStorage.removeItem('pending_vnpay_booking');
+        navigate('/booking', { replace: true });
       }
     }
   }, [location.search, navigate, pushToast, setMovie, setDate, setShowtime]);
 
-  // Reset store when leaving booking page (unmounting), except when redirecting to auth
+  // Reset store when leaving booking page (unmounting), except when redirecting to auth or payment return
   useEffect(() => {
     return () => {
       const isRedirecting = sessionStorage.getItem('booking_redirect_auth');
+      const isPaymentRedirecting = sessionStorage.getItem('payment_redirect');
       if (isRedirecting === 'true') {
         sessionStorage.removeItem('booking_redirect_auth');
+      } else if (isPaymentRedirecting === 'true') {
+        sessionStorage.removeItem('payment_redirect');
       } else {
         // If no invoice was created yet, release HELD seats back to AVAILABLE on the BE
         if (!currentInvoiceRef.current?.id && !USE_MOCK) {
@@ -300,6 +342,30 @@ export default function Booking() {
       }
     }
   }, [movie, showtime, setStep]);
+
+  // Mobile pagehide & beforeunload handler to guarantee seat release on mobile swipe back or tab close
+  useEffect(() => {
+    const handlePageHide = () => {
+      if (!isNavigatingToPayment.current && !USE_MOCK) {
+        const state = useBookingStore.getState();
+        const user = useAuthStore.getState().user;
+        if (state.selectedSeats.length > 0 && state.showtime && user) {
+          const dbIds = state.selectedSeats.map(s => s.dbId).filter(Boolean);
+          const baseUrl = API_URL && API_URL.startsWith('http') ? API_URL : window.location.origin;
+          const url = `${baseUrl.replace(/\/api\/?$/, '')}/api/showtime-seats/showtimes/${state.showtime.id}/release`;
+          const blob = new Blob([JSON.stringify({ seatIds: dbIds, userId: user.id })], { type: 'application/json' });
+          navigator.sendBeacon(url, blob);
+        }
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
+    };
+  }, []);
 
   const canNext = useMemo(() => {
     if (step === 1) return !!movie && !!showtime;
@@ -446,7 +512,7 @@ export default function Booking() {
         combos,
         payment
       };
-      sessionStorage.setItem('pending_vnpay_booking', JSON.stringify(bookingState));
+      localStorage.setItem('pending_vnpay_booking', JSON.stringify(bookingState));
       
       const vnpayUrl = await generateVnPayUrl({
         invoiceId,
@@ -465,7 +531,7 @@ export default function Booking() {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     // Require login before entering seat selection (step 1 → 2)
     if (step === 1) {
       const user = useAuthStore.getState().user;
@@ -476,18 +542,132 @@ export default function Booking() {
         return;
       }
     }
+
+    if (step === 2) {
+      const { selectedSeats, ticketCount, layout, roomConfig, showtime, setOrphanSeatIds, startHoldTimer, initLayout } = useBookingStore.getState();
+
+      if (selectedSeats.length !== ticketCount) {
+        setValidationModal({
+          message: `Vui lòng chọn đủ ${ticketCount} ghế trước khi tiếp tục.`
+        });
+        return;
+      }
+
+      const orphans = findOrphanSeats(selectedSeats, layout, roomConfig);
+      if (orphans.length > 0) {
+        setOrphanSeatIds(orphans);
+        setValidationModal({
+          message: "Việc chọn vị trí ghế của bạn không được để trống 1 ghế ở bên trái, giữa hoặc bên phải trên cùng hàng ghế mà bạn vừa chọn."
+        });
+        return;
+      }
+
+      setOrphanSeatIds([]);
+
+      const currentUser = useAuthStore.getState().user;
+      const currentUserId = currentUser?.id || 1;
+
+      // 1. Kiểm tra trên layout sơ đồ hiện tại xem có ghế nào vừa bị người khác giữ không
+      const conflictSeats = selectedSeats.filter(s => {
+        const currentSeatInLayout = layout[s.id];
+        return currentSeatInLayout && (currentSeatInLayout.status === 'held' || currentSeatInLayout.status === 'booked') && currentSeatInLayout.holdBy !== currentUserId;
+      });
+
+      if (conflictSeats.length > 0) {
+        const conflictNames = conflictSeats.map(s => s.id).join(', ');
+        
+        // Tự động bỏ chọn các ghế bị xung đột khỏi selectedSeats
+        const conflictSet = new Set(conflictSeats.map(s => s.id));
+        const newSelected = selectedSeats.filter(s => !conflictSet.has(s.id));
+        useBookingStore.setState({ selectedSeats: newSelected });
+
+        setValidationModal({
+          message: `Ghế (${conflictNames}) vừa được người khác giữ trước. Hệ thống đã tự động bỏ chọn ghế này!`
+        });
+        await initLayout();
+        return;
+      }
+
+      // 2. Chờ kết quả từ Backend Hold API để xác nhận giữ ghế thành công
+      if (!USE_MOCK && showtime && selectedSeats.length > 0) {
+        const dbIds = selectedSeats.map(s => s.dbId).filter(Boolean);
+        try {
+          await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/hold`, {
+            seatIds: dbIds,
+            userId: currentUserId
+          });
+        } catch (error) {
+          console.error('[HoldStep2] Failed to hold seats on BE:', error);
+          const rawMsg = error.response?.data || error.message || '';
+
+          // Cập nhật lại sơ đồ ghế mới nhất từ Backend
+          await initLayout();
+
+          // Lấy layout mới vừa cập nhật từ DB store
+          const latestLayout = useBookingStore.getState().layout;
+          const currentSelectedSeats = useBookingStore.getState().selectedSeats;
+
+          // Loại bỏ các ghế đã bị HELD (bởi người khác) hoặc BOOKED
+          const validSelectedSeats = currentSelectedSeats.filter(s => {
+            const seatInLayout = latestLayout[s.id];
+            if (!seatInLayout) return false;
+            if (seatInLayout.status === 'held' && seatInLayout.holdBy !== currentUserId) {
+              return false;
+            }
+            if (seatInLayout.status === 'booked') {
+              return false;
+            }
+            return true;
+          });
+
+          // Cập nhật lại selectedSeats trong store (đã tự động bỏ chọn ghế bị giữ)
+          useBookingStore.setState({ selectedSeats: validSelectedSeats });
+
+          const displayMsg = typeof rawMsg === 'string' && rawMsg.trim().length > 0
+            ? rawMsg
+            : 'Một số ghế bạn chọn vừa được người khác giữ trước. Hệ thống đã tự động bỏ chọn các ghế bị giữ!';
+
+          setValidationModal({
+            message: typeof displayMsg === 'string' ? displayMsg : 'Một số ghế bạn chọn vừa được người khác giữ trước. Hệ thống đã tự động bỏ chọn các ghế bị giữ!'
+          });
+
+          return; // CHẶN KHÔNG CHO SANG BƯỚC 3
+        }
+      }
+
+      // Chỉ bắt đầu đếm ngược 5 phút giữ ghế sau khi Backend đã giữ thành công (forceReset = true)
+      startHoldTimer(null, true);
+    }
+
     if (step < 4) setStep(step + 1);
     else {
       processCheckout();
     }
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (typeof step === 'number' && step > 1) {
       if (step === 3) {
+        setStepLoading(true);
+        const { selectedSeats, showtime, clearHoldTimer, setSelectedSeats, initLayout } = useBookingStore.getState();
+        if (!USE_MOCK && showtime && selectedSeats.length > 0) {
+          const user = useAuthStore.getState().user;
+          const userId = user?.id || 1;
+          const dbIds = selectedSeats.map(s => s.dbId).filter(Boolean);
+          try {
+            await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+              seatIds: dbIds,
+              userId: userId
+            });
+          } catch (err) {
+            console.warn('[ReleaseStep3] Seat release response handled:', err?.response?.data || err.message);
+          }
+        }
+        clearHoldTimer();
         setCombos({});
-        // Refresh seat layout from BE when returning to seat selection step
-        useBookingStore.getState().initLayout();
+        if (setSelectedSeats) setSelectedSeats([]);
+        await initLayout();
+        setStepLoading(false);
       }
       setStep(step - 1);
     }
@@ -501,6 +681,18 @@ export default function Booking() {
     combos,
     payment,
   };
+
+  const handleRestart = useCallback(() => {
+    const user = useAuthStore.getState().user;
+    if (!USE_MOCK && showtime && selectedSeats.length > 0 && user) {
+      apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
+        seatIds: selectedSeats.map(s => s.dbId),
+        userId: user.id
+      }).catch(err => console.error('[Restart] Failed to release seats:', err));
+    }
+    resetStore();
+    navigate('/booking');
+  }, [showtime, selectedSeats, resetStore, navigate]);
 
   const setBookingCompat = useCallback((fn) => {
     const dummy = fn({ movie, date, showtime, combos, payment });
@@ -517,6 +709,17 @@ export default function Booking() {
         <div className="max-w-3xl mx-auto px-4">
           <StepIndicator step="success" />
           <SuccessScreen booking={bookingCompat} />
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'failure') {
+    return (
+      <div className="min-h-screen" style={{ background: '#121212' }}>
+        <div className="max-w-3xl mx-auto px-4">
+          <StepIndicator step="failure" />
+          <FailureScreen onRestart={handleRestart} />
         </div>
       </div>
     );
@@ -566,7 +769,7 @@ export default function Booking() {
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap text-zinc-400 text-[11px] font-medium leading-none mt-1">
                         {showtime ? (
-                          <span>{showtime.format} {showtime.lang === 'Phụ đề' ? 'Phụ Đề' : 'Thuyết Minh'}</span>
+                          <span>{showtime.format} {showtime.lang}</span>
                         ) : (
                           <span className="text-zinc-550 italic">Chưa chọn định dạng</span>
                         )}
@@ -928,23 +1131,17 @@ export default function Booking() {
       )}
 
       {stepLoading && (
-        <div
-          className="fixed inset-0 bg-[#0c0c0e]/95 z-[99999] flex flex-col items-center justify-center gap-4"
-          style={{ animation: 'fadeInLoader 0.15s ease-out forwards' }}
-        >
-          {/* Cinema Reel Spinning Loader */}
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 rounded-full border-2 border-t-[#CF0F47] border-r-transparent border-b-[#CF0F47] border-l-transparent animate-spin" />
-            <div className="absolute inset-2 rounded-full border border-dashed border-zinc-700 animate-spin-reverse" />
-            <div className="absolute inset-[18px] rounded-full bg-gradient-to-tr from-[#CF0F47] to-red-500 shadow-[0_0_12px_rgba(207,15,71,0.6)] animate-pulse" />
-          </div>
-          <p className="text-zinc-300 text-xs font-extrabold uppercase tracking-[0.2em] animate-pulse">
-            {step === 2 && "Đang tải sơ đồ ghế..."}
-            {step === 3 && "Đang tải dịch vụ Combo..."}
-            {step === 4 && "Đang chuẩn bị thanh toán..."}
-            {step === 1 && "Đang chuẩn bị suất chiếu..."}
-          </p>
-        </div>
+        <FilmReelLoader
+          fullScreen
+          size="lg"
+          text={
+            step === 2 ? "Đang tải sơ đồ ghế..." :
+            step === 3 ? "Đang tải dịch vụ Combo..." :
+            step === 4 ? "Đang chuẩn bị thanh toán..." :
+            step === 1 ? "Đang chuẩn bị suất chiếu..." :
+            "Đang xử lý..."
+          }
+        />
       )}
 
       {/* Toast Notification Container */}
@@ -972,6 +1169,65 @@ export default function Booking() {
           </div>
         ))}
       </div>
+
+      {/* VALIDATION MODAL (Matching Lotte Cinema / Screenshot design) */}
+      {validationModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in select-none">
+          <div className="w-full max-w-[420px] bg-white rounded-3xl p-7 text-center shadow-2xl flex flex-col items-center border border-white/20">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#ff7a00] mb-4">
+              <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+
+            <h3 className="text-zinc-900 font-extrabold text-xl mb-3">
+              Thông báo
+            </h3>
+
+            <p className="text-zinc-600 text-sm leading-relaxed mb-6 font-medium px-2">
+              {validationModal.message}
+            </p>
+
+            <button
+              onClick={() => setValidationModal(null)}
+              className="w-full bg-[#ff7a00] hover:bg-[#e06c00] active:scale-[0.98] text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition-all text-sm cursor-pointer"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SEAT HOLD TIMEOUT MODAL */}
+      {showTimeoutModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
+          <div className="w-full max-w-[420px] bg-zinc-900 rounded-3xl p-7 text-center shadow-2xl flex flex-col items-center border border-white/10">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 animate-pulse">
+              <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+
+            <h3 className="text-white font-extrabold text-xl mb-3">
+              Hết thời gian giữ ghế!
+            </h3>
+
+            <p className="text-zinc-400 text-sm leading-relaxed mb-6 font-medium px-2">
+              Thời gian giữ ghế tạm thời (5 phút) của bạn đã hết. Ghế đã tự động giải phóng. Vui lòng quay lại chọn ghế để thực hiện lại từ đầu.
+            </p>
+
+            <button
+              onClick={() => {
+                setShowTimeoutModal(false);
+                handleRestart();
+              }}
+              className="w-full bg-[#CF0F47] hover:bg-[#b00c3b] active:scale-[0.98] text-white font-extrabold py-3.5 px-6 rounded-2xl transition-all shadow-lg text-sm cursor-pointer"
+            >
+              Quay lại chọn ghế
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .animate-fade-in {

@@ -210,9 +210,9 @@ export default function ShowtimeSelection({ booking, setBooking, movies, dateWin
         movieId: booking.movie.id,
         date: booking.date.key,
       },
-    }).then((res) => {
+    }).then(async (res) => {
       const data = Array.isArray(res) ? res : (res?.data || []);
-      const mapped = data.filter((st) => st && st.startTime).map((st) => {
+      const mappedPromises = data.filter((st) => st && st.startTime).map(async (st) => {
         const timeStr = st.startTime.slice(0, 5);
 
         const duration = booking.movie.duration || 120;
@@ -221,19 +221,45 @@ export default function ShowtimeSelection({ booking, setBooking, movies, dateWin
         const endH = String(Math.floor(totalMinutes / 60) % 24).padStart(2, '0');
         const endM = String(totalMinutes % 60).padStart(2, '0');
 
-        const isLồngTiếng = st.type ? (st.type.includes('Lồng Tiếng') || st.type.includes('Lòng tiếng')) : false;
+        const typeLower = (st.type || '').toLowerCase();
+        let lang = 'Phụ Đề';
+        if (typeLower.includes('lồng tiếng') || typeLower.includes('lòng tiếng')) {
+          lang = 'Lồng Tiếng';
+        } else if (typeLower.includes('thuyết minh')) {
+          lang = 'Thuyết Minh';
+        }
+
+        const isImax = (st.hallName && st.hallName.toUpperCase().includes('IMAX')) || typeLower.includes('imax');
+        const is3D = typeLower.includes('3d');
+        const format = isImax ? 'IMAX' : (is3D ? '3D' : '2D');
+
+        let available = 80;
+        let total = 100;
+        try {
+          const seatRes = await apiClient.get(`/showtime-seats/showtimes/${st.id}`);
+          const seatData = Array.isArray(seatRes) ? seatRes : (seatRes?.data || []);
+          if (seatData.length > 0) {
+            total = seatData.length;
+            available = seatData.filter((s) => (s.status || '').toUpperCase() === 'AVAILABLE').length;
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch seats count for showtime ${st.id}:`, e);
+        }
 
         return {
           id: st.id,
-          format: (st.hallName && st.hallName.includes('IMAX')) ? 'IMAX' : '2D',
-          lang: isLồngTiếng ? 'Thuyết minh' : 'Phụ đề',
+          format,
+          lang,
           start: timeStr,
           end: `${endH}:${endM}`,
-          available: 80,
+          available,
+          total,
           room: st.hallName || 'Phòng chiếu',
           hallId: st.hallId,
         };
       });
+
+      const mapped = await Promise.all(mappedPromises);
       // Sort showtimes chronologically
       mapped.sort((a, b) => a.start.localeCompare(b.start));
       setDynamicShowtimes(mapped);
@@ -261,8 +287,8 @@ export default function ShowtimeSelection({ booking, setBooking, movies, dateWin
     return dynamicShowtimes.reduce((acc, st) => {
       const key = `${st.format} ${st.lang}`;
       if (!acc[key]) acc[key] = [];
-      // Deduplicate showtimes with identical start time
-      if (!acc[key].some((item) => item.start === st.start)) {
+      // Deduplicate showtimes with identical start time and room
+      if (!acc[key].some((item) => item.start === st.start && item.room === st.room)) {
         acc[key].push(st);
       }
       return acc;
@@ -568,7 +594,7 @@ export default function ShowtimeSelection({ booking, setBooking, movies, dateWin
                               }}
                             >
                               <span style={{ color: low ? (sel ? '#FFFFFF' : '#ef4444') : (sel ? '#FFFFFF' : '#737373') }}>
-                                {st.available}/100
+                                {st.available}/{st.total || 100}
                               </span>
                             </div>
                           </button>
