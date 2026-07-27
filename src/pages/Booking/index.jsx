@@ -215,6 +215,14 @@ export default function Booking() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [step]);
 
+  // Khởi động WebSocket realtime sync ở tầng Booking (tồn tại xuyên suốt mọi bước, không bị ngắt khi chuyển step)
+  const simulateRealtimeSync = useBookingStore(s => s.simulateRealtimeSync);
+  useEffect(() => {
+    if (!showtime?.id) return;
+    const cleanup = simulateRealtimeSync();
+    return () => { if (cleanup) cleanup(); };
+  }, [showtime?.id, simulateRealtimeSync]);
+
   // Handle VNPAY payment callback
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -565,12 +573,12 @@ export default function Booking() {
       setOrphanSeatIds([]);
 
       const currentUser = useAuthStore.getState().user;
-      const currentUserId = currentUser?.id || 1;
+      const currentUserId = currentUser?.id ? String(currentUser.id) : null;
 
       // 1. Kiểm tra trên layout sơ đồ hiện tại xem có ghế nào vừa bị người khác giữ không
       const conflictSeats = selectedSeats.filter(s => {
         const currentSeatInLayout = layout[s.id];
-        return currentSeatInLayout && (currentSeatInLayout.status === 'held' || currentSeatInLayout.status === 'booked') && currentSeatInLayout.holdBy !== currentUserId;
+        return currentSeatInLayout && (currentSeatInLayout.status === 'held' || currentSeatInLayout.status === 'booked') && String(currentSeatInLayout.holdBy) !== String(currentUserId);
       });
 
       if (conflictSeats.length > 0) {
@@ -611,7 +619,7 @@ export default function Booking() {
           const validSelectedSeats = currentSelectedSeats.filter(s => {
             const seatInLayout = latestLayout[s.id];
             if (!seatInLayout) return false;
-            if (seatInLayout.status === 'held' && seatInLayout.holdBy !== currentUserId) {
+            if (seatInLayout.status === 'held' && String(seatInLayout.holdBy) !== String(currentUserId)) {
               return false;
             }
             if (seatInLayout.status === 'booked') {
@@ -649,10 +657,10 @@ export default function Booking() {
     if (typeof step === 'number' && step > 1) {
       if (step === 3) {
         setStepLoading(true);
-        const { selectedSeats, showtime, clearHoldTimer, setSelectedSeats, initLayout } = useBookingStore.getState();
+        const { selectedSeats, showtime, clearHoldTimer, initLayout } = useBookingStore.getState();
         if (!USE_MOCK && showtime && selectedSeats.length > 0) {
           const user = useAuthStore.getState().user;
-          const userId = user?.id || 1;
+          const userId = user?.id ? String(user.id) : null;
           const dbIds = selectedSeats.map(s => s.dbId).filter(Boolean);
           try {
             await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
@@ -665,7 +673,7 @@ export default function Booking() {
         }
         clearHoldTimer();
         setCombos({});
-        if (setSelectedSeats) setSelectedSeats([]);
+        useBookingStore.setState({ selectedSeats: [] });
         await initLayout();
         setStepLoading(false);
       }

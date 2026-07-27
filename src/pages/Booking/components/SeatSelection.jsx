@@ -238,7 +238,7 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
 
 const SeatCell = memo(function SeatCell({ seat, selected, previewSelected, isOrphan, disabled, onToggle, onMouseEnter, onMouseLeave, displayNumber, zoom = 1.0 }) {
   if (!seat) return null;
-  const { id, row, col, type, status, price } = seat;
+  const { id, row, col, type, status, price, displayName } = seat;
 
   const sizePx = Math.round(28 * zoom);
   const fontSizePx = Math.round(10 * zoom);
@@ -277,15 +277,15 @@ const SeatCell = memo(function SeatCell({ seat, selected, previewSelected, isOrp
         <button
           disabled
           title={`Ghế ${id} đang được người khác giữ tạm`}
-          className="rounded-lg flex items-center justify-center bg-[#221735] border border-[#8B5CF6]/70 text-[#C084FC] font-semibold cursor-not-allowed select-none relative shadow-[0_0_8px_rgba(139,92,246,0.25)]"
+          className="rounded-lg flex items-center justify-center bg-purple-900/90 border-2 border-purple-400 text-purple-100 font-extrabold cursor-not-allowed select-none relative shadow-[0_0_14px_rgba(168,85,247,0.8)] animate-pulse"
           style={baseStyle}
         >
           <span>{displayNumber}</span>
-          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
-          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_6px_#c084fc]" />
         </button>
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-zinc-950/95 text-[10px] text-white px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-white/10 pointer-events-none z-50">
-          Ghế {id} - Đang giữ tạm
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-purple-950 text-[10px] text-purple-200 px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-purple-500/50 pointer-events-none z-50">
+          Ghế {displayName || id} - Đang giữ tạm
         </div>
       </div>
     );
@@ -400,12 +400,12 @@ const CoupleSeatCell = memo(function CoupleSeatCell({
         disabled
         style={btnStyle}
         title={`Ghế đôi ${idL}-${idR} - Đang giữ tạm`}
-        className="rounded-lg flex items-center justify-around bg-[#221735] border border-[#8B5CF6]/70 text-[#C084FC] font-semibold cursor-not-allowed select-none relative shadow-[0_0_8px_rgba(139,92,246,0.25)]"
+        className="rounded-lg flex items-center justify-around bg-purple-900/90 border-2 border-purple-400 text-purple-100 font-extrabold cursor-not-allowed select-none relative shadow-[0_0_14px_rgba(168,85,247,0.8)] animate-pulse"
       >
         <span>{displayNumberL}</span>
         <span>{displayNumberR}</span>
-        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
-        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_6px_#c084fc]" />
       </button>
     );
   }
@@ -444,7 +444,6 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
     toggleSeat,
     toggleSeatBlock,
     releaseSeatBlock,
-    simulateRealtimeSync,
     roomConfig,
     ticketCount,
     setTicketCount,
@@ -474,12 +473,7 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
     }
   }, [ticketCount, blockModes, selectedBlockSize]);
 
-  useEffect(() => {
-    const cleanup = simulateRealtimeSync();
-    return () => {
-      if (cleanup) cleanup();
-    };
-  }, [simulateRealtimeSync]);
+  // WebSocket realtime sync được quản lý ở Booking/index.jsx (tầng cha) để tồn tại xuyên suốt mọi bước
 
   const selectedIds = useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats]);
   const isMaxReached = selectedSeats.length >= ticketCount;
@@ -860,11 +854,11 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
 
                 {/* 5. Đang giữ tạm */}
                 <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#221735] border-2 border-[#8B5CF6]/70 relative shadow-[0_0_8px_rgba(139,92,246,0.25)]">
-                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-ping" />
-                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#A855F7]" />
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-purple-900/90 border-2 border-purple-400 relative shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_6px_#c084fc]" />
                   </div>
-                  <span className="text-purple-300 font-semibold text-xs leading-tight min-h-[32px] flex items-center justify-center">Đang giữ tạm</span>
+                  <span className="text-purple-300 font-bold text-xs leading-tight min-h-[32px] flex items-center justify-center">Đang giữ tạm</span>
                 </div>
 
                 {/* 6. Đã bán */}

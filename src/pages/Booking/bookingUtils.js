@@ -202,7 +202,8 @@ export const groupSeatsByDisplay = (seats) => {
         totalPrice: 0
       };
     }
-    groups[key].ids.push(seat.id);
+    const label = seat.displayName || seat.id;
+    groups[key].ids.push(label);
     groups[key].totalPrice += (seat.price || 0);
   });
   

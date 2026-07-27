@@ -332,23 +332,20 @@ export const useBookingStore = create((set, get) => ({
     const hallId = showtime?.hallId;
     if (hallId && showtime?.id && !USE_MOCK) {
       try {
-        const [seatsRes, showtimeSeatsRes, priceListRes, seatTypesRes] = await Promise.race([
-          Promise.all([
-            apiClient.get(`/halls/${hallId}/seat-map`),
-            apiClient.get(`/showtime-seats/showtimes/${showtime.id}`).catch(err => {
-              console.warn('Failed to load showtime seats status from BE:', err);
-              return [];
-            }),
-            apiClient.get(`/price-lists`).catch(err => {
-              console.warn('Failed to load price lists from BE:', err);
-              return [];
-            }),
-            apiClient.get(`/seat-types`).catch(err => {
-              console.warn('Failed to load seat types from BE:', err);
-              return [];
-            })
-          ]),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching seat map')), 1500))
+        const [seatsRes, showtimeSeatsRes, priceListRes, seatTypesRes] = await Promise.all([
+          apiClient.get(`/halls/${hallId}/seat-map`),
+          apiClient.get(`/showtime-seats/showtimes/${showtime.id}`).catch(err => {
+            console.warn('Failed to load showtime seats status from BE:', err);
+            return [];
+          }),
+          apiClient.get(`/price-lists`).catch(err => {
+            console.warn('Failed to load price lists from BE:', err);
+            return [];
+          }),
+          apiClient.get(`/seat-types`).catch(err => {
+            console.warn('Failed to load seat types from BE:', err);
+            return [];
+          })
         ]);
 
         const dbSeats = seatsRes?.data || seatsRes || [];
@@ -423,6 +420,18 @@ export const useBookingStore = create((set, get) => ({
             heldSeats: []
           };
           
+          // Build seat display number mapping per row (colNumber -> 1, 2, 3...)
+          const seatDisplayNumbers = {};
+          uniqueRows.forEach(row => {
+            const rowSeats = dbSeats.filter(s => s.rowLabel === row && !walkwayTypeIds.includes(s.seatTypeId));
+            const sortedAscCols = rowSeats.map(s => s.colNumber).sort((a, b) => a - b);
+            seatDisplayNumbers[row] = {};
+            let counter = 1;
+            sortedAscCols.forEach(col => {
+              seatDisplayNumbers[row][col] = counter++;
+            });
+          });
+
           const restoredSelectedSeats = [];
 
           dbSeats.forEach(s => {
@@ -435,24 +444,28 @@ export const useBookingStore = create((set, get) => ({
             let status = 'available';
             const statusUpper = (beStatus || '').toUpperCase();
             
+            const displayNum = seatDisplayNumbers[s.rowLabel]?.[s.colNumber] || s.colNumber;
+            const displayName = `${s.rowLabel}${displayNum}`;
+
             if (statusUpper === 'SOLD' || statusUpper === 'OFF' || statusUpper === 'BOOKED') {
               status = 'booked';
             } else if (statusUpper === 'HELD') {
               const currentUser = useAuthStore.getState().user;
-              const currentUserId = currentUser?.id || 1;
-              const isHeldByOthers = holdBy && holdBy !== 0 && holdBy !== currentUserId;
+              const currentUserId = currentUser?.id ? String(currentUser.id) : null;
+              const isHeldByOthers = holdBy && String(holdBy) !== "0" && String(holdBy) !== String(currentUserId);
 
               if (isHeldByOthers) {
                 status = 'held';
-              } else if (holdBy === currentUserId || get().selectedSeats.some(sel => sel.dbId === s.id)) {
+              } else if ((currentUserId && String(holdBy) === String(currentUserId)) || get().selectedSeats.some(sel => String(sel.dbId) === String(s.id))) {
                 status = 'selected';
                 
                 // If held by current user in DB, ensure it's in selectedSeats
-                const alreadySelected = get().selectedSeats.some(sel => sel.dbId === s.id);
+                const alreadySelected = get().selectedSeats.some(sel => String(sel.dbId) === String(s.id));
                 if (!alreadySelected) {
                   const price = get().getSeatPriceForAudience(s.seatTypeId, 'Người lớn');
                   restoredSelectedSeats.push({
                     id: s.rowLabel + s.colNumber,
+                    displayName,
                     dbId: s.id,
                     row: s.rowLabel,
                     col: s.colNumber,
@@ -470,6 +483,7 @@ export const useBookingStore = create((set, get) => ({
             
             newLayout[s.rowLabel + s.colNumber] = {
               id: s.rowLabel + s.colNumber,
+              displayName,
               dbId: s.id,
               row: s.rowLabel,
               col: s.colNumber,
@@ -481,13 +495,13 @@ export const useBookingStore = create((set, get) => ({
           
           // Giữ lại các ghế hợp lệ và tự động loại bỏ các ghế đã bị người khác giữ (HELD) hoặc đã bán (SOLD/BOOKED)
           const currentUser = useAuthStore.getState().user;
-          const currentUserId = currentUser?.id || 1;
+          const currentUserId = currentUser?.id ? String(currentUser.id) : null;
 
           const validSelectedSeats = [
             ...get().selectedSeats.filter(sel => {
-              const dbStatus = (showtimeSeatStatuses[sel.dbId] || '').toUpperCase();
-              const holdBy = showtimeSeatHolders[sel.dbId];
-              const isHeldByOthers = dbStatus === 'HELD' && holdBy && holdBy !== 0 && holdBy !== currentUserId;
+              const dbStatus = (showtimeSeatStatuses[sel.dbId] || showtimeSeatStatuses[String(sel.dbId)] || '').toUpperCase();
+              const holdBy = showtimeSeatHolders[sel.dbId] ?? showtimeSeatHolders[String(sel.dbId)];
+              const isHeldByOthers = dbStatus === 'HELD' && holdBy && String(holdBy) !== "0" && String(holdBy) !== String(currentUserId);
               const isUnavailable = dbStatus === 'SOLD' || dbStatus === 'OFF' || dbStatus === 'BOOKED' || isHeldByOthers;
               return !isUnavailable;
             }),
@@ -606,8 +620,8 @@ export const useBookingStore = create((set, get) => ({
 
         const nextSelected = [
           ...selectedSeats,
-          { id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId },
-          { id: partnerId, row, col: partnerCol, type: partner.type, price: partner.price, dbId: partner.dbId }
+          { id, displayName: seat.displayName || id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId },
+          { id: partnerId, displayName: partner.displayName || partnerId, row, col: partnerCol, type: partner.type, price: partner.price, dbId: partner.dbId }
         ];
 
         const nextLayout = { ...layout };
@@ -630,7 +644,7 @@ export const useBookingStore = create((set, get) => ({
           return;
         }
 
-        const nextSelected = [...selectedSeats, { id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId }];
+        const nextSelected = [...selectedSeats, { id, displayName: seat.displayName || id, row, col, type: seat.type, price: seat.price, dbId: seat.dbId }];
         nextLayout[id] = { ...nextLayout[id], status: 'selected' };
 
         set({ selectedSeats: nextSelected, layout: nextLayout });
@@ -671,6 +685,7 @@ export const useBookingStore = create((set, get) => ({
 
       const newObjects = unselectedSeats.map((s) => ({
         id: s.id,
+        displayName: s.displayName || s.id,
         row: s.row,
         col: s.col,
         type: s.type,
@@ -794,12 +809,16 @@ export const useBookingStore = create((set, get) => ({
     }
   },
 
-  // Đồng bộ thời gian thực qua WebSocket + Fallback Polling (3s)
+  // Đồng bộ thời gian thực qua WebSocket (Chỉ dùng Polling dự phòng khi WebSocket bị lỗi)
   simulateRealtimeSync: () => {
     const showtime = get().showtime;
-    if (!showtime) {
+    if (!showtime?.id || USE_MOCK) {
       return () => {};
     }
+
+    let pollInterval = null;
+    let stompClientInstance = null;
+    let isClosedIntentionally = false;
 
     const fetchLatestSeats = async () => {
       if (!showtime?.id || USE_MOCK) return;
@@ -810,14 +829,12 @@ export const useBookingStore = create((set, get) => ({
 
         const { layout, selectedSeats } = get();
         const currentUser = useAuthStore.getState().user;
-        const currentUserId = currentUser?.id || 1;
-        const selectedSet = new Set(selectedSeats.map(s => s.id));
-
+        const currentUserId = currentUser?.id ? String(currentUser.id) : null;
         const nextLayout = { ...layout };
         let hasChange = false;
 
         dbShowtimeSeats.forEach((sts) => {
-          const seatKey = Object.keys(nextLayout).find((key) => nextLayout[key].dbId === sts.seatId);
+          const seatKey = Object.keys(nextLayout).find((key) => String(nextLayout[key].dbId) === String(sts.seatId));
           if (seatKey) {
             const stsStatus = (sts.status || '').toUpperCase();
             let targetStatus = 'available';
@@ -825,16 +842,17 @@ export const useBookingStore = create((set, get) => ({
             if (stsStatus === 'SOLD' || stsStatus === 'OFF' || stsStatus === 'BOOKED') {
               targetStatus = 'booked';
             } else if (stsStatus === 'HELD') {
-              const holdBy = sts.holdBy ?? sts.heldByUserId;
-              if (holdBy === currentUserId || selectedSet.has(seatKey)) {
+              const isHeldByMe = currentUserId && sts.holdBy && String(sts.holdBy) === String(currentUserId);
+              const isSelectedByMe = selectedSeats.some(sel => String(sel.dbId) === String(sts.seatId));
+              if (isHeldByMe || isSelectedByMe) {
                 targetStatus = 'selected';
               } else {
                 targetStatus = 'held';
               }
             }
 
-            if (nextLayout[seatKey].status !== targetStatus) {
-              nextLayout[seatKey] = { ...nextLayout[seatKey], status: targetStatus };
+            if (nextLayout[seatKey].status !== targetStatus || nextLayout[seatKey].holdBy !== sts.holdBy) {
+              nextLayout[seatKey] = { ...nextLayout[seatKey], status: targetStatus, holdBy: sts.holdBy };
               hasChange = true;
             }
           }
@@ -848,27 +866,21 @@ export const useBookingStore = create((set, get) => ({
       }
     };
 
-    fetchLatestSeats();
-
-    let pollInterval = null;
-
     const startFallbackPolling = () => {
-      if (!pollInterval) {
-        console.warn('⚠️ [RealtimeSync] WebSocket gặp sự cố/ngắt kết nối, kích hoạt Polling 3s dự phòng...');
-        pollInterval = setInterval(fetchLatestSeats, 3000);
+      if (!pollInterval && !isClosedIntentionally) {
+        console.log('⚠️ WebSocket disconnected or error. Starting fallback polling (4s)...');
+        fetchLatestSeats();
+        pollInterval = setInterval(fetchLatestSeats, 4000);
       }
     };
 
     const stopFallbackPolling = () => {
       if (pollInterval) {
-        console.log('✅ [RealtimeSync] WebSocket kết nối thành công, tắt Polling!');
+        console.log('🛑 WebSocket is active. Disabling fallback polling.');
         clearInterval(pollInterval);
         pollInterval = null;
       }
     };
-
-    let stompClientInstance = null;
-    let isClosedIntentionally = false;
 
     try {
       let wsBaseUrl = '/ws-cinema';
@@ -887,8 +899,9 @@ export const useBookingStore = create((set, get) => ({
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
         onConnect: () => {
-          stopFallbackPolling();
           console.log('✅ Connected to WebSocket for showtime:', showtime.id);
+          // Tắt Polling dự phòng ngay khi WebSocket kết nối thành công
+          stopFallbackPolling();
 
           stompClientInstance.subscribe(`/topic/showtimes/${showtime.id}/seats`, (message) => {
             try {
@@ -898,23 +911,25 @@ export const useBookingStore = create((set, get) => ({
               if (event && Array.isArray(event.seatIds) && event.seatIds.length > 0) {
                 const { layout, selectedSeats } = get();
                 const currentUser = useAuthStore.getState().user;
-                const currentUserId = currentUser?.id || 1;
-                const eventUserId = event.userId;
+                const currentUserId = currentUser?.id ? String(currentUser.id) : null;
                 const eventStatus = (event.status || '').toUpperCase();
+                const eventUserId = event.userId ? String(event.userId) : null;
 
-                const seatIdSet = new Set(event.seatIds);
+                const seatIdSet = new Set(event.seatIds.map(id => String(id)));
                 const nextLayout = { ...layout };
                 let hasChange = false;
 
                 Object.keys(nextLayout).forEach((key) => {
                   const seat = nextLayout[key];
-                  if (seat && seatIdSet.has(seat.dbId)) {
+                  if (seat && seatIdSet.has(String(seat.dbId))) {
                     let targetStatus = 'available';
 
                     if (eventStatus === 'SOLD' || eventStatus === 'OFF' || eventStatus === 'BOOKED') {
                       targetStatus = 'booked';
                     } else if (eventStatus === 'HELD') {
-                      if (eventUserId === currentUserId) {
+                      const isMe = currentUserId && eventUserId && String(eventUserId) === String(currentUserId);
+                      const isSelectedByMe = selectedSeats.some(sel => String(sel.dbId) === String(seat.dbId));
+                      if (isMe || isSelectedByMe) {
                         targetStatus = 'selected';
                       } else {
                         targetStatus = 'held';
@@ -923,8 +938,9 @@ export const useBookingStore = create((set, get) => ({
                       targetStatus = 'available';
                     }
 
-                    if (seat.status !== targetStatus) {
-                      nextLayout[key] = { ...seat, status: targetStatus };
+                    const targetHoldBy = targetStatus === 'available' ? 0 : event.userId;
+                    if (seat.status !== targetStatus || seat.holdBy !== targetHoldBy) {
+                      nextLayout[key] = { ...seat, status: targetStatus, holdBy: targetHoldBy };
                       hasChange = true;
                     }
                   }
@@ -943,36 +959,29 @@ export const useBookingStore = create((set, get) => ({
             } catch (e) {
               console.warn('[RealtimeSync] Error parsing WS event:', e);
             }
-
-            // Đồng bộ thêm 1 lượt REST API ở background để đảm bảo dữ liệu luôn chính xác tuyệt đối
-            fetchLatestSeats();
           });
+
+          // Đồng bộ trạng thái mới nhất từ DB ngay sau khi kết nối/tái kết nối
+          // Đảm bảo không bỏ lỡ các sự kiện trong lúc WebSocket bị ngắt
+          fetchLatestSeats();
         },
         onWebSocketClose: () => {
-          if (!isClosedIntentionally) {
-            startFallbackPolling();
-          }
+          if (!isClosedIntentionally) startFallbackPolling();
         },
         onWebSocketError: (err) => {
-          if (!isClosedIntentionally) {
-            console.warn('[RealtimeSync] WebSocket error:', err);
-            startFallbackPolling();
-          }
+          console.warn('[RealtimeSync] WebSocket error:', err);
+          if (!isClosedIntentionally) startFallbackPolling();
         },
         onStompError: (frame) => {
-          if (!isClosedIntentionally) {
-            console.warn('STOMP broker error:', frame?.headers?.['message']);
-            startFallbackPolling();
-          }
+          console.warn('STOMP broker error:', frame?.headers?.['message']);
+          if (!isClosedIntentionally) startFallbackPolling();
         }
       });
 
       stompClientInstance.activate();
     } catch (err) {
-      if (!isClosedIntentionally) {
-        console.warn('WebSocket init failed, fallback to 3s polling:', err);
-        startFallbackPolling();
-      }
+      console.warn('WebSocket init error, fallback to polling:', err);
+      startFallbackPolling();
     }
 
     return () => {
