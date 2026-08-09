@@ -223,17 +223,18 @@ export default function Profile() {
     if (validateInfo()) {
       try {
         if (!user || !user.id) {
-          showToast('Không tìm thấy thông tin người dùng! Vui lòng đăng nhập lại.');
+          showToast('Không tìm thấy thông tin người dùng! Vui lòng đăng nhập lại.', 'warning');
           return;
         }
         await updateProfile(user.id, formData);
         updateUser(formData);
         setIsEditing(false);
-        showToast('Cập nhật thông tin cá nhân thành công!');
+        showToast('Cập nhật thông tin cá nhân thành công!', 'success');
       } catch (err) {
         console.error('Error updating profile:', err);
-        const errMsg = err.response?.data?.message || err.response?.data || 'Không thể kết nối đến máy chủ. Vui lòng thử lại!';
-        showToast(errMsg);
+        const data = err.response?.data;
+        const errMsg = (typeof data === 'string' && data) || data?.errorMessage || data?.message || err.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại!';
+        showToast(errMsg, 'error');
       }
     }
   };

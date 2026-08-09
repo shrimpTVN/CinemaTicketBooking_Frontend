@@ -74,6 +74,14 @@ export default function Toast({ toasts = [], onRemove, position = 'bottom-right'
           },
         }[type] || {};
 
+        // Safely format message to string to prevent React rendering errors
+        let displayMessage = '';
+        if (typeof t.message === 'string') {
+          displayMessage = t.message;
+        } else if (t.message && typeof t.message === 'object') {
+          displayMessage = t.message.errorMessage || t.message.message || 'Thao tác không thành công';
+        }
+
         return (
           <div
             key={t.id}
@@ -89,9 +97,9 @@ export default function Toast({ toasts = [], onRemove, position = 'bottom-right'
               <h4 className="font-google-sans text-sm font-bold text-white tracking-tight leading-tight">
                 {config.defaultTitle}
               </h4>
-              {t.message && (
+              {displayMessage && (
                 <p className="font-google-sans text-xs text-zinc-300 font-normal leading-relaxed mt-1 break-words">
-                  {t.message}
+                  {displayMessage}
                 </p>
               )}
             </div>
