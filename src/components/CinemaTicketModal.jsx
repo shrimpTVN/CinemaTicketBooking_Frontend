@@ -117,7 +117,15 @@ export function CinemaTicketCard({ ticket, compact = false }) {
         {/* Format + Lang + Age */}
         <div className="flex items-center gap-1.5 flex-wrap justify-center">
           <span className={`text-zinc-400 ${compact ? 'text-[11px]' : 'text-xs sm:text-sm'}`}>
-            {showtime?.format || '2D'} {showtime?.lang || 'Phụ Đề'}
+            {(() => {
+              const fmt = showtime?.format || '2D';
+              const lng = showtime?.lang || '';
+              const fmtLower = fmt.toLowerCase();
+              if (!lng || fmtLower.includes('phụ đề') || fmtLower.includes('lồng tiếng') || fmtLower.includes('thuyết minh') || fmtLower.includes(lng.toLowerCase())) {
+                return fmt;
+              }
+              return `${fmt} ${lng}`;
+            })()}
           </span>
           {movie?.ageRating && (
             <span

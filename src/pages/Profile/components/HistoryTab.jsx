@@ -103,7 +103,15 @@ export default function HistoryTab({ allTickets, handleTicketClick }) {
                   <p className="text-white font-bold text-sm truncate leading-tight">{ticket.title}</p>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <span className="text-zinc-400 text-xs">
-                      {ticket.format || '2D'} {ticket.lang || 'Phụ đề'}
+                      {(() => {
+                        const fmt = ticket.format || '2D';
+                        const lng = ticket.lang || '';
+                        const fmtLower = fmt.toLowerCase();
+                        if (!lng || fmtLower.includes('phụ đề') || fmtLower.includes('lồng tiếng') || fmtLower.includes('thuyết minh') || fmtLower.includes(lng.toLowerCase())) {
+                          return fmt;
+                        }
+                        return `${fmt} ${lng}`;
+                      })()}
                     </span>
                     {ticket.ageRating && (
                       <span

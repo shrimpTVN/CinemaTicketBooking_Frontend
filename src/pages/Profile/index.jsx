@@ -437,7 +437,7 @@ export default function Profile() {
         price: Number(inv.totalAmount || 0),
         status: 'Thành công',
         format: inv.showtime?.type || '2D',
-        lang: 'Phụ đề',
+        lang: (inv.showtime?.type && (inv.showtime.type.toLowerCase().includes('phụ đề') || inv.showtime.type.toLowerCase().includes('lồng tiếng') || inv.showtime.type.toLowerCase().includes('thuyết minh'))) ? '' : 'Phụ đề',
         ageRating,
         isLocal: false,
         rawInvoice: inv,
@@ -463,7 +463,7 @@ export default function Profile() {
         },
         showtime: {
           format: inv.showtime.type || '2D',
-          lang: 'Phụ đề',
+          lang: (inv.showtime.type && (inv.showtime.type.toLowerCase().includes('phụ đề') || inv.showtime.type.toLowerCase().includes('lồng tiếng') || inv.showtime.type.toLowerCase().includes('thuyết minh'))) ? '' : 'Phụ đề',
           start: inv.showtime.startTime ? inv.showtime.startTime.substring(0, 5) : '',
           room: inv.showtime.hallName
         },
