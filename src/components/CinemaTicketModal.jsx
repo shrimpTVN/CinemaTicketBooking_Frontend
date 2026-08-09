@@ -68,7 +68,7 @@ export function CinemaTicketCard({ ticket, compact = false }) {
   const dateLabel = date?.dateLabel || '';
   const displayDate = formatShowDate(rawDate, dateLabel);
   const timeLabel = showtime?.start || '';
-  const theaterName = theater || showtime?.room || 'Rạp chiếu phim';
+  const theaterName = showtime?.room || (theater && theater !== 'Rạp chiếu phim' ? theater : null) || 'Phòng chiếu';
 
   const seatListStr = useMemo(() => {
     if (!seats) return '-';

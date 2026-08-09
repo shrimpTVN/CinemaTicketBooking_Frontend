@@ -427,8 +427,8 @@ export default function Profile() {
         id: String(inv.invoiceId).startsWith('INV') ? inv.invoiceId : `INV${inv.invoiceId}`,
         title: inv.showtime?.movieName || 'Phim',
         poster,
-        theater: 'Rạp chiếu phim',
-        room: inv.showtime?.hallName || 'Phòng 3',
+        theater: inv.showtime?.hallName || 'Phòng chiếu',
+        room: inv.showtime?.hallName || 'Phòng chiếu',
         date: formattedDate,
         rawDate: inv.showtime?.date,
         time: startTime,
@@ -455,7 +455,7 @@ export default function Profile() {
       const inv = ticket.rawInvoice;
       const ticketToView = {
         ticketCode: `INV${inv.invoiceId}`,
-        theater: ticket.theater || 'Rạp chiếu phim',
+        theater: inv.showtime?.hallName || ticket.room || 'Phòng chiếu',
         movie: {
           title: inv.showtime.movieName,
           posterUrl: ticket.poster,
