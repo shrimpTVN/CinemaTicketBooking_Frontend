@@ -107,8 +107,12 @@ export default function Profile() {
       apiClient.get(`/invoices/users/${user.id}`)
         .then(res => {
           const invoices = Array.isArray(res) ? res : (res?.data || []);
-          console.log(">>> Invoices loaded from BE:", invoices);
-          setDbInvoices(invoices);
+          const paidInvoices = invoices
+            .filter(inv => inv.status === 'PAID')
+            .sort((a, b) => (b.invoiceId || b.id || 0) - (a.invoiceId || a.id || 0))
+            .slice(0, 20);
+          console.log(">>> Top 20 Paid Invoices loaded from BE:", paidInvoices);
+          setDbInvoices(paidInvoices);
         })
         .catch(err => {
           console.error("Failed to fetch invoices from BE:", err);
