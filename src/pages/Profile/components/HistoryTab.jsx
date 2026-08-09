@@ -41,10 +41,11 @@ function formatDisplayTime(ticket) {
 }
 
 export default function HistoryTab({ allTickets, handleTicketClick }) {
-  // Group tickets by month, sorted most recent first
+  // Group at most 20 tickets by month, sorted most recent first
   const grouped = useMemo(() => {
+    const limitedTickets = (allTickets || []).slice(0, 20);
     const map = new Map();
-    allTickets.forEach(ticket => {
+    limitedTickets.forEach(ticket => {
       const { key, label } = getMonthKey(ticket);
       if (!map.has(key)) map.set(key, { label, tickets: [] });
       map.get(key).tickets.push(ticket);

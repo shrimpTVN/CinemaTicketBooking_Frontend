@@ -447,7 +447,7 @@ export default function Profile() {
     const dbTicketCodes = new Set(mappedDbTickets.map((t) => String(t.id)));
     const uniqueLocalTickets = adaptedLocal.filter((t) => !dbTicketCodes.has(String(t.id)));
 
-    return [...mappedDbTickets, ...uniqueLocalTickets];
+    return [...mappedDbTickets, ...uniqueLocalTickets].slice(0, 20);
   }, [dbInvoices, moviesList, localTickets]);
 
   const handleTicketClick = (ticket) => {
