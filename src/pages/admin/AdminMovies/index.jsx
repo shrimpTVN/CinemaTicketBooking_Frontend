@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAllMovies, createMovie, updateMovie } from '../../../services/movieService';
-import Toast from './components/Toast';
+import Toast from '../../../components/Toast';
 import StatusBadge from './components/StatusBadge';
 import MovieFormModal from './components/MovieFormModal';
 
@@ -19,9 +19,9 @@ export default function AdminMovies() {
   // Toast
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, type = 'success') => {
+  const addToast = useCallback((message, type = 'success', title) => {
     const id = Date.now();
-    setToasts((p) => [...p, { id, message, type }]);
+    setToasts((p) => [...p, { id, message, type, title }]);
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
   }, []);
   const removeToast = (id) => setToasts((p) => p.filter((t) => t.id !== id));

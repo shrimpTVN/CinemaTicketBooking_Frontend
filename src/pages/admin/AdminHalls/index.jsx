@@ -11,6 +11,7 @@ import {
   createHallType,
   updateHallType
 } from '../../../services/hallService';
+import Toast from '../../../components/Toast';
 
 // Tiện ích chuyển chỉ số hàng thành ký tự A, B, C...
 const getRowLabel = (index) => {
@@ -51,11 +52,12 @@ export default function AdminHalls() {
 
   // Toasts notifications
   const [toasts, setToasts] = useState([]);
-  const addToast = (msg, type = 'success') => {
+  const addToast = (message, type = 'success', title) => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
+    setToasts((prev) => [...prev, { id, message, type, title }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
+  const removeToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // Tải dữ liệu ban đầu
   const loadData = async () => {
@@ -488,30 +490,7 @@ export default function AdminHalls() {
   return (
     <div className="p-6 space-y-6 text-left">
       {/* Toast Messages container */}
-      <div className="fixed top-6 right-6 z-[9999] space-y-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`px-4 py-3 rounded-xl border text-sm font-medium flex items-center gap-2 shadow-2xl transition-all animate-bounce ${t.type === 'error'
-              ? 'bg-red-950/90 border-red-500/30 text-red-200'
-              : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
-              }`}
-          >
-            {t.type === 'error' ? (
-              <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4M12 16h.01" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                <path d="M22 4L12 14.01l-3-3" />
-              </svg>
-            )}
-            {t.msg}
-          </div>
-        ))}
-      </div>
+      <Toast toasts={toasts} onRemove={removeToast} />
 
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-5">

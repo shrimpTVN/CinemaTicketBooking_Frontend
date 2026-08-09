@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Camera, Trophy } from 'lucide-react';
 import TabFilter from '../../components/TabFilter';
 import CinemaTicketModal from '../../components/CinemaTicketModal';
+import Toast from '../../components/Toast';
 import { changePassword, updateProfile } from '../../services/authService';
 import { USE_MOCK } from '../../services/apiConfig';
 import apiClient from '../../services/apiClient';
@@ -148,15 +149,15 @@ export default function Profile() {
   const [newEmailForm, setNewEmailForm] = useState({ newEmail: '' });
   const [emailErrors, setEmailErrors] = useState({});
 
-  // Toast message
-  const [toastMessage, setToastMessage] = useState(null);
+  // Toast notifications state
+  const [toasts, setToasts] = useState([]);
 
-  const showToast = (message) => {
-    setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
+  const showToast = (message, type = 'success', title) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type, title }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
+  const removeToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -528,14 +529,7 @@ export default function Profile() {
     <div className="max-w-7xl mx-auto px-4 py-8 text-left font-google-sans min-h-screen">
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-4 z-[9999] bg-[#CF0F47] text-white px-5 py-3 rounded-lg shadow-xl flex items-center gap-3 animate-slide-in border border-white/20">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="text-body2 font-semibold">{toastMessage}</span>
-        </div>
-      )}
+      <Toast toasts={toasts} onRemove={removeToast} />
 
       {/* Grid Layout: Sidebar 1/3 (4 columns), Main Content 2/3 (8 columns) */}
       <div className="profile-layout-container flex flex-col gap-8 mt-4 items-start">

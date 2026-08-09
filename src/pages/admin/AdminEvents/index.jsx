@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getAllEvents, createEvent, updateEvent, updateEventStatus } from '../../../services/eventService';
 import { uploadEventPoster, uploadEventBanner } from '../../../services/mediaService';
+import Toast from '../../../components/Toast';
 
 export default function AdminEvents() {
   const [events, setEvents] = useState([]);
@@ -22,11 +23,12 @@ export default function AdminEvents() {
 
   // Toast notifications state
   const [toasts, setToasts] = useState([]);
-  const addToast = (msg, type = 'success') => {
+  const addToast = (message, type = 'success', title) => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
+    setToasts((prev) => [...prev, { id, message, type, title }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
+  const removeToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // Tải dữ liệu từ Backend API
   const loadData = useCallback(async () => {
@@ -193,19 +195,7 @@ export default function AdminEvents() {
   return (
     <div className="p-6 space-y-6 text-left">
       {/* Toast Notifications List */}
-      <div className="fixed top-6 right-6 z-[9999] space-y-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`px-4 py-3 rounded-xl border text-xs font-bold flex items-center gap-2 pointer-events-auto shadow-2xl transition-all animate-bounce ${
-              t.type === 'error' ? 'bg-red-950/90 border-red-500/30 text-red-200' : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
-            }`}
-          >
-            <span>{t.type === 'error' ? '✕' : '✓'}</span>
-            <span>{t.msg}</span>
-          </div>
-        ))}
-      </div>
+      <Toast toasts={toasts} onRemove={removeToast} />
 
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-5">

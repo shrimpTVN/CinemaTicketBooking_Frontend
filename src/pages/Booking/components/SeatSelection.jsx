@@ -3,35 +3,7 @@ import { createPortal } from 'react-dom';
 import { Minus, Plus } from 'lucide-react';
 import { useBookingStore } from '../../../store/bookingStore';
 import { fmtVND, isSeatDisabledForCount, getBlockModesForTicketCount, findBestValidCandidateBlock, getActiveBlockSize } from '../bookingUtils';
-
-function SeatToast({ toasts }) {
-  return (
-    <div className="fixed bottom-6 left-1/2 z-[9999] flex flex-col gap-2 pointer-events-none" style={{ transform: 'translateX(-50%)', minWidth: 320, maxWidth: 480 }}>
-      {toasts.map(t => (
-        <div
-          key={t.id}
-          className="flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium"
-          style={{
-            background: t.type === 'error' ? 'rgba(207,15,71,0.95)' : 'rgba(202,138,4,0.95)',
-            color: '#fff',
-            backdropFilter: 'blur(10px)',
-            border: t.type === 'error' ? '1px solid rgba(255,100,100,0.3)' : '1px solid rgba(255,220,50,0.3)',
-            animation: 'slide-up-toast 0.3s ease-out forwards',
-          }}
-        >
-          <span style={{ fontSize: 16, lineHeight: 1.4 }}>{t.type === 'error' ? '🚫' : '⚠️'}</span>
-          <span style={{ lineHeight: 1.5 }}>{t.message}</span>
-        </div>
-      ))}
-      <style>{`
-        @keyframes slide-up-toast {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-    </div>
-  );
-}
+import Toast from '../../../components/Toast';
 
 const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -875,7 +847,7 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
           </div>
         </div>
       </div>
-      <SeatToast toasts={toasts} />
+      <Toast toasts={toasts} position="bottom-center" />
 
       {/* Custom Styles for Scrollbars */}
       <style>{`

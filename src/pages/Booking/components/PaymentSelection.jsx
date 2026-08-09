@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PAYMENT_METHODS } from '../bookingConstants';
 import { useBookingStore } from '../../../store/bookingStore';
+import Toast from '../../../components/Toast';
 
 // Map of styling configurations for database payment methods
 const methodStyling = {
@@ -13,7 +14,14 @@ const methodStyling = {
 
 export default function PaymentSelection({ booking, setBooking }) {
   const dbPaymentMethods = useBookingStore((state) => state.paymentMethods);
-  const [toastMessage, setToastMessage] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'warning', title) => {
+    const id = Date.now();
+    setToasts([{ id, message, type, title }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  };
+  const removeToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // If we have payment methods loaded from backend, use them. Otherwise fallback to hardcoded constants.
   const rawMethods = dbPaymentMethods.length > 0
@@ -29,35 +37,26 @@ export default function PaymentSelection({ booking, setBooking }) {
             bg: style.bg,
             letter: style.letter,
             logo: pm.logo,
+            disabled: false,
           };
         })
     : PAYMENT_METHODS;
 
-  // Always ensure VNPAY is at the top of the list
-  const displayedMethods = [...rawMethods].sort((a, b) => {
-    if (a.id === 'VNPAY') return -1;
-    if (b.id === 'VNPAY') return 1;
-    return 0;
-  });
+  const displayedMethods = rawMethods;
 
-  const handleSelectMethod = (methodId, methodName) => {
-    if (methodId !== 'VNPAY') {
-      setToastMessage(`Cổng thanh toán ${methodName} đang bảo trì. Vui lòng chọn cổng VNPAY!`);
-      setTimeout(() => setToastMessage(null), 4000);
-      setBooking((b) => ({ ...b, payment: 'VNPAY' }));
-    } else {
-      setBooking((b) => ({ ...b, payment: 'VNPAY' }));
+  const handleSelectMethod = (id, name) => {
+    const target = displayedMethods.find((m) => m.id === id);
+    if (target?.disabled) {
+      addToast(`Cổng thanh toán ${name} đang bảo trì, vui lòng chọn VNPAY`, 'warning', 'Phương thức bảo trì');
+      return;
     }
+    setToasts([]);
+    setBooking((p) => ({ ...p, payment: id }));
   };
 
   return (
     <div className="rounded-2xl border border-white/8 overflow-hidden relative" style={{ background: '#1A1A1A' }}>
-      {toastMessage && (
-        <div className="mx-4 mt-4 px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
-          <span className="text-base">⚠️</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <Toast toasts={toasts} onRemove={removeToast} position="bottom-center" />
 
       <div className="px-5 py-4 border-b border-white/6 text-left">
         <h2 className="text-white font-bold text-sm">Phương thức thanh toán</h2>
