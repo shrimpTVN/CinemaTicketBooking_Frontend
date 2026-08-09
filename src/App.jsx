@@ -29,6 +29,8 @@ const AdminPricing = lazy(() => import('./pages/admin/AdminPricing/index.jsx'));
 const AdminComments = lazy(() => import('./pages/admin/AdminComments/index.jsx'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports/index.jsx'));
 const AdminSeatTypes = lazy(() => import('./pages/admin/AdminSeatTypes/index.jsx'));
+const AdminAudienceTypes = lazy(() => import('./pages/admin/AdminAudienceTypes/index.jsx'));
+const AdminPaymentMethods = lazy(() => import('./pages/admin/AdminPaymentMethods/index.jsx'));
 
 // Hall page
 const Hall = lazy(() => import('./pages/Hall'));
@@ -106,6 +108,8 @@ function AppContent() {
             <Route path="genres" element={<AdminGenres />} />
             <Route path="pricing" element={<AdminPricing />} />
             <Route path="seat-types" element={<AdminSeatTypes />} />
+            <Route path="audience-types" element={<AdminAudienceTypes />} />
+            <Route path="payment-methods" element={<AdminPaymentMethods />} />
             <Route path="comments" element={<AdminComments />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>

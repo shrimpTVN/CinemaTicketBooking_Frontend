@@ -134,6 +134,30 @@ const NAV_GROUPS = [
           </svg>
         ),
       },
+      {
+        label: 'Loại khán giả',
+        to: '/admin/audience-types',
+        end: false,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+            <circle cx="9" cy="7" r="4" />
+            <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+            <circle cx="19" cy="7" r="2" />
+            <path d="M23 21v-1a3 3 0 00-3-3" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Phương thức thanh toán',
+        to: '/admin/payment-methods',
+        end: false,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+            <line x1="1" y1="10" x2="23" y2="10" />
+          </svg>
+        ),
+      },
     ],
   },
   {
@@ -191,6 +215,8 @@ const PAGE_TITLES = {
   '/admin/seat-types': 'Quản lý Loại ghế',
   '/admin/bookings': 'Quản lý Đặt vé & Hóa đơn',
   '/admin/products': 'Quản lý Bắp nước & F&B',
+  '/admin/audience-types': 'Quản lý Loại khán giả',
+  '/admin/payment-methods': 'Quản lý Phương thức thanh toán',
   '/admin/users': 'Quản lý Tài khoản người dùng',
   '/admin/comments': 'Quản lý Đánh giá & Bình luận',
   '/admin/reports': 'Báo cáo & Thống kê',
@@ -207,6 +233,8 @@ const PAGE_SUBTITLES = {
   '/admin/seat-types': 'Cấu hình loại ghế, phụ thu và hình ảnh minh hoạ',
   '/admin/bookings': 'Tra cứu hóa đơn và trạng thái thanh toán',
   '/admin/products': 'Combos bắp rang, nước uống, đồ ăn vặt',
+  '/admin/audience-types': 'Người lớn, trẻ em, học sinh, sinh viên...',
+  '/admin/payment-methods': 'VNPay, MoMo, ZaloPay, tiền mặt và phụ phí',
   '/admin/users': 'Phân quyền và quản lý trạng thái tài khoản',
   '/admin/comments': 'Kiểm duyệt đánh giá và bình luận phim',
   '/admin/reports': 'Doanh thu và xu hướng kinh doanh',
