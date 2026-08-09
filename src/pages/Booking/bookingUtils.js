@@ -171,9 +171,10 @@ export const groupSeats = (seats) => {
         
         groupedCouples.push({
           id: `${left.id}, ${right.id}`,
+          displayName: `${left.displayName || left.id}, ${right.displayName || right.id}`,
           type: 'couple',
           row: left.row,
-          price: left.price,
+          price: (left.price || 0) + (right.price || 0),
           audienceType: left.audienceType,
           isGroupedCouple: true
         });
@@ -209,8 +210,7 @@ export const groupSeatsByDisplay = (seats) => {
   
   return Object.values(groups).map(g => {
     const typeLabel = g.type === 'vip' ? 'Ghế VIP' : g.type === 'couple' ? 'Ghế Đôi' : 'Ghế Thường';
-    // couple seats: 2 physical seats = 1 unit; others: each seat = 1 unit
-    const count = g.type === 'couple' ? Math.ceil(g.ids.length / 2) : g.ids.length;
+    const count = g.ids.length;
     return {
       id: `${g.type}_${g.audienceType}_${g.ids.join('_')}`,
       label: `${typeLabel} (${g.audienceType}) ${g.ids.join(', ')}`,

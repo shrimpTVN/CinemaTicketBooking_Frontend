@@ -76,8 +76,8 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
       ref={popoverRef}
       className={
         isMobile
-          ? 'fixed left-1/2 top-1/2 w-[calc(100vw-32px)] max-w-[300px] rounded-2xl border border-white/10 shadow-2xl z-[99999] p-5 flex flex-col gap-4'
-          : 'absolute right-0 mt-2 w-60 rounded-2xl border border-white/10 shadow-2xl z-[9999] p-4 flex flex-col gap-3'
+          ? 'fixed left-1/2 top-1/2 w-[calc(100vw-32px)] max-w-[280px] rounded-2xl border border-zinc-800 shadow-2xl z-[99999] p-4 flex flex-col gap-3'
+          : 'absolute right-0 mt-2 w-60 sm:w-68 rounded-2xl border border-zinc-800 shadow-2xl z-[9999] p-3.5 flex flex-col gap-2.5'
       }
       style={{
         backgroundColor: '#18181b',
@@ -99,7 +99,7 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
         )}
       </div>
 
-      <div className="px-1 pt-1 pb-0">
+      <div className="px-0.5 pt-0.5 pb-0">
         <input
           type="range"
           min="0"
@@ -113,22 +113,30 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
           style={{ touchAction: 'pan-x' }}
         />
 
-        <div
-          className="flex justify-between mt-2.5 text-[9px] font-black text-zinc-500 select-none"
-          style={{ paddingLeft: 14, paddingRight: 14 }}
-        >
-          {Array.from({ length: max + 1 }, (_, v) => (
-            <span
-              key={v}
-              onClick={() => { commitValue(v); setIsOpen(false); }}
-              className={`cursor-pointer transition-colors duration-75 ${
-                localValue === v ? 'text-[#CF0F47] font-bold scale-110' : 'hover:text-zinc-300 active:text-white'
-              }`}
-              style={{ touchAction: 'manipulation' }}
-            >
-              {v}
-            </span>
-          ))}
+        {/* Quick tap compact number buttons */}
+        <div className="flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-zinc-800/80 select-none">
+          {Array.from({ length: max + 1 }, (_, v) => {
+            const isSelected = localValue === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  commitValue(v);
+                  setIsOpen(false);
+                }}
+                className={`w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center select-none active:scale-90 ${
+                  isSelected
+                    ? 'bg-cta text-white shadow-md shadow-cta/40 scale-105'
+                    : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
+                }`}
+                style={{ touchAction: 'manipulation' }}
+                title={`Chọn nhanh ${v} vé`}
+              >
+                {v}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -154,16 +162,16 @@ const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
       {isOpen && (
         isMobile
           ? createPortal(
-              <>
-                <div
-                  className="fixed inset-0 bg-black/60 z-[99998]"
-                  style={{ animation: 'fadeInBackdrop 0.15s ease-out forwards' }}
-                  onClick={() => { commitValue(localValue); setIsOpen(false); }}
-                />
-                {sliderPanel}
-              </>,
-              document.body
-            )
+            <>
+              <div
+                className="fixed inset-0 bg-black/60 z-[99998]"
+                style={{ animation: 'fadeInBackdrop 0.15s ease-out forwards' }}
+                onClick={() => { commitValue(localValue); setIsOpen(false); }}
+              />
+              {sliderPanel}
+            </>,
+            document.body
+          )
           : sliderPanel
       )}
 
@@ -651,7 +659,7 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
               {roomConfig.name || 'Phòng Chiếu'}
             </h3>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {/* Zoom Controls */}
             <div className="flex items-center gap-1 bg-zinc-950/60 p-0.5 rounded-lg border border-white/8">
@@ -684,44 +692,35 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
 
         {/* Seat Selection Grid */}
         <div className="w-full pt-6 pb-6 text-center flex flex-col items-center" style={{ background: '#0F0F0F' }}>
-          {/* Audience selection panel & Lotte Cinema "Chọn ghế liền nhau" Bar */}
-          <div className="mb-6 w-[calc(100%-2.5rem)] max-w-4xl bg-zinc-900/60 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/8 shadow-xl shadow-black/20 flex flex-col gap-4 relative z-30">
-            {/* Top row: Ticket Count dropdowns */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="text-left">
-                <span className="text-zinc-400 text-[10px] font-extrabold uppercase tracking-wider block">Chọn loại vé &amp; Số lượng</span>
-                <span className="text-zinc-500 text-[9px] block mt-0.5">
-                  Tối đa 8 người | Tổng: <span className="text-[#CF0F47] font-bold">{ticketCount} vé</span>
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 flex-1 md:justify-end">
-                {Object.keys(audienceSelection).map((audType) => {
-                  const audCount = audienceSelection[audType] || 0;
-                  const desc = audType === 'Người lớn' ? 'Khách từ 18 tuổi' : audType === 'U22' ? 'Khách từ 6-22 tuổi' : 'Trẻ em từ 3-5 tuổi';
-                  const maxForThisType = 8 - (ticketCount - audCount);
-
-                  return (
-                    <div key={audType} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-zinc-950/20 px-3 py-1.5 rounded-xl border border-white/4">
-                      <div className="text-left pr-1">
-                        <span className="text-white text-xs font-bold block leading-tight">{audType}</span>
-                        <span className="text-[9px] text-zinc-500 block leading-normal">{desc}</span>
-                      </div>
-
-                      <CustomDropdown
-                        value={audCount}
-                        max={maxForThisType}
-                        onChange={(val) => {
-                          const nextSelection = { ...audienceSelection, [audType]: val };
-                          setAudienceSelection(nextSelection);
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Audience selection panel */}
+          <div className="mb-6 w-[calc(100%-2rem)] max-w-4xl bg-zinc-900/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-zinc-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 relative z-30">
+            {/* Left: Summary label */}
+            <div className="text-left">
+              <span className="text-white text-xs font-bold block">Chọn loại vé &amp; Số lượng</span>
             </div>
 
+            {/* Right: Clean Dropdown Buttons */}
+            <div className="flex flex-wrap items-center gap-3 md:justify-end">
+              {['Người lớn', 'U22', 'Trẻ nhỏ'].map((audType) => {
+                const audCount = audienceSelection[audType] || 0;
+                const maxForThisType = 8 - (ticketCount - audCount);
+
+                return (
+                  <div key={audType} className="flex items-center gap-2 bg-zinc-950/70 px-3 py-1.5 rounded-xl border border-zinc-800/80">
+                    <span className="text-xs font-medium text-zinc-200 select-none pr-1">{audType}</span>
+
+                    <CustomDropdown
+                      value={audCount}
+                      max={maxForThisType}
+                      onChange={(val) => {
+                        const nextSelection = { ...audienceSelection, [audType]: val };
+                        setAudienceSelection(nextSelection);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Swipe gesture tip for mobile */}
@@ -732,7 +731,7 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
           {/* Seat Map Horizontal Scroll Container */}
           <div className="w-full overflow-x-auto pb-6 px-5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent select-none">
             <div className="mx-auto w-fit min-w-max flex flex-col items-center py-2">
-              
+
               {/* Screen curve */}
               <div className="relative w-full mb-10 mt-2 text-center" style={{ width: '100%', maxWidth: `${seatBlockWidth}px`, minWidth: '280px' }}>
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 h-8 bg-sky-500/10 blur-xl rounded-full" />
@@ -824,65 +823,60 @@ export default function SeatSelection({ booking, setBooking, pushToast, toasts }
             </div>
           </div>
 
-          {/* Legend Matching Design System */}
-          <div className="w-full px-5 max-w-4xl mx-auto mt-6">
-            <div className="bg-zinc-950/70 border border-white/8 rounded-2xl p-5 md:p-6 backdrop-blur-md shadow-2xl">
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-4 md:gap-6 items-start justify-items-center select-none text-center">
-                {/* 1. Thường */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#16141D] border-2 border-[#332A3B]" />
-                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Thường</span>
-                </div>
+          {/* Clean Seamless Seat Legend */}
+          <div className="w-full px-4 max-w-4xl mx-auto mt-4 pt-2">
+            <div className="grid grid-cols-2 min-[480px]:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:justify-center gap-x-5 gap-y-2.5 select-none">
+              {/* 1. Thường */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-[#16141D] border border-[#443850] shrink-0" />
+                <span className="text-zinc-300 font-medium text-[11px] sm:text-xs">Thường</span>
+              </div>
 
-                {/* 2. VIP */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#241A12] border-2 border-[#F59E0B]/70" />
-                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">VIP</span>
-                </div>
+              {/* 2. VIP */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-[#241A12] border border-[#F59E0B] shrink-0" />
+                <span className="text-zinc-300 font-medium text-[11px] sm:text-xs">VIP</span>
+              </div>
 
-                {/* 3. Couple */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#26121F] border-2 border-[#EC4899]/70" />
-                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Couple</span>
-                </div>
+              {/* 3. Couple */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-[#26121F] border border-[#EC4899] shrink-0" />
+                <span className="text-zinc-300 font-medium text-[11px] sm:text-xs">Couple</span>
+              </div>
 
-                {/* 4. Đang chọn */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#0EA1CF] border-2 border-[#0EA1CF] shadow-[0_0_10px_rgba(14,161,207,0.5)]" />
-                  <span className="text-sky-400 text-xs font-bold leading-tight min-h-[32px] flex items-center justify-center">Đang chọn</span>
-                </div>
+              {/* 4. Đang chọn */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-[#0EA1CF] border border-[#0EA1CF] shadow-[0_0_8px_rgba(14,161,207,0.5)] shrink-0" />
+                <span className="text-sky-400 font-bold text-[11px] sm:text-xs">Đang chọn</span>
+              </div>
 
-                {/* 5. Đang giữ tạm */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-purple-900/90 border-2 border-purple-400 relative shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_6px_#c084fc]" />
-                  </div>
-                  <span className="text-purple-300 font-bold text-xs leading-tight min-h-[32px] flex items-center justify-center">Đang giữ tạm</span>
-                </div>
+              {/* 5. Đang giữ tạm */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-purple-950 border border-purple-500/80 shadow-[0_0_6px_rgba(168,85,247,0.4)] shrink-0" />
+                <span className="text-purple-300 font-bold text-[11px] sm:text-xs">Đang giữ tạm</span>
+              </div>
 
-                {/* 6. Đã bán */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-[#1E1E24] border border-[#26262B] flex items-center justify-center text-zinc-600">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Đã bán</span>
+              {/* 6. Đã bán */}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-[#1E1E24] border border-zinc-700 flex items-center justify-center text-zinc-500 shrink-0">
+                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+                  </svg>
                 </div>
+                <span className="text-zinc-400 font-medium text-[11px] sm:text-xs">Đã bán</span>
+              </div>
 
-                {/* 7. Không được chọn */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-lg bg-transparent border-2 border-dashed border-zinc-600/60 opacity-60" />
-                  <span className="text-zinc-400 text-xs font-medium leading-tight min-h-[32px] flex items-center justify-center">Không được chọn</span>
-                </div>
+              {/* 7. Không được chọn */}
+              <div className="flex items-center gap-2 col-span-2 min-[480px]:col-span-1">
+                <div className="w-4 h-4 rounded bg-transparent border border-dashed border-zinc-500/70 shrink-0" />
+                <span className="text-zinc-400 font-medium text-[11px] sm:text-xs">Không được chọn</span>
               </div>
             </div>
           </div>
         </div>
       </div>
       <SeatToast toasts={toasts} />
-      
+
       {/* Custom Styles for Scrollbars */}
       <style>{`
         .scrollbar-thin::-webkit-scrollbar {

@@ -51,44 +51,39 @@ export default function ShowtimeSelector({
                   className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-start justify-between gap-4"
                 >
                   {/* Format Heading Left */}
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 flex items-center">
                     <h4 className="text-body2 font-bold text-text-main uppercase tracking-wider">{format.name}</h4>
-                    <span className="text-[11px] text-text-sub3 block mt-1">{format.price}</span>
                   </div>
 
                   {/* Times List Grid Right */}
                   <div className="flex flex-wrap gap-2 flex-grow md:justify-end">
-                    {format.times.map((st) => (
-                      <button
-                        key={st.id || st.start}
-                        onClick={() => handleShowtimeClick(format.name, st.start, st.id, st.room)}
-                        className="flex flex-col items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-[#0EA1CF] hover:border-[#0EA1CF] transition-all duration-200 cursor-pointer hover:-translate-y-0.5 text-center overflow-hidden group"
-                        style={{
-                          width: '82px',
-                          height: '72px',
-                          padding: 0,
-                        }}
-                      >
-                        {/* Hour */}
-                        <div className="flex-1 flex flex-col justify-center items-center pt-1.5">
-                          <span className="font-extrabold text-sm tracking-wide text-white group-hover:text-white transition-colors" style={{ lineHeight: 1.1 }}>
-                            {st.start}
-                          </span>
-                          <span className="text-[10px] font-normal text-zinc-500 group-hover:text-white/70 transition-colors mt-0.5">
-                            ~ {st.end}
-                          </span>
-                        </div>
-
-                        {/* Available seats */}
-                        <div
-                          className="w-full py-0.5 flex items-center justify-center border-t text-[9px] font-semibold bg-black/25 group-hover:bg-black/15 border-white/5 transition-colors"
+                    {format.times.map((st) => {
+                      const low = st.available <= 20;
+                      return (
+                        <button
+                          key={st.id || st.start}
+                          onClick={() => handleShowtimeClick(format.name, st.start, st.id, st.room)}
+                          className="flex flex-col items-center justify-between rounded-xl border border-white/10 bg-zinc-900/60 hover:bg-[#0EA1CF] hover:border-[#0EA1CF] hover:shadow-lg hover:shadow-[#0EA1CF]/25 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 text-center overflow-hidden group w-[96px] h-[74px] shrink-0"
                         >
-                          <span className="text-zinc-500 group-hover:text-white transition-colors">
-                            {st.available}/{st.total || 100}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                          {/* Hours */}
+                          <div className="flex-1 flex flex-col justify-center items-center pt-2">
+                            <span className="font-extrabold text-sm tracking-tight text-white group-hover:text-white transition-colors leading-none">
+                              {st.start}
+                            </span>
+                            <span className="text-[10px] font-medium text-zinc-400 group-hover:text-white/80 transition-colors mt-1">
+                              ~ {st.end}
+                            </span>
+                          </div>
+
+                          {/* Available Seats Bar */}
+                          <div className="w-full py-1.5 flex items-center justify-center border-t border-white/6 bg-black/30 group-hover:bg-black/15 group-hover:border-white/15 transition-colors">
+                            <span className={`text-[10px] font-semibold tracking-tight text-center leading-none block w-full transition-colors ${low ? 'text-amber-400 group-hover:text-white' : 'text-zinc-400 group-hover:text-white'}`}>
+                              {st.available}/{st.total || 408}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))

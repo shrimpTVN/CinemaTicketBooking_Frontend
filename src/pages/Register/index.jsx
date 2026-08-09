@@ -102,10 +102,10 @@ export default function Register() {
         });
 
         // Resolve user and token from backend response
-        const user = response.user || response.data?.user || response;
-        const token = response.token || response.data?.token;
+        const user = response.user || response.data?.user;
+        const token = response.token || response.data?.token || 'cookie-managed-token';
 
-        if (!user || !token) {
+        if (!user) {
           throw new Error('Dữ liệu phản hồi từ máy chủ không hợp lệ');
         }
 

@@ -94,6 +94,53 @@ export const uploadHallImages = async (files) => {
       'Content-Type': 'multipart/form-data',
     },
   });
-
   return res?.data || res || [];
+};
+
+/**
+ * Tải ảnh sự kiện lên Cloudinary qua Backend API
+ * @param {File} file 
+ * @returns {Promise<string>}
+ */
+export const uploadEventPoster = async (file) => {
+  if (USE_MOCK) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return URL.createObjectURL(file);
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await apiClient.post('/media/upload/event-poster', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  const data = res?.data || res;
+  return data.url;
+};
+
+/**
+ * Tải ảnh banner sự kiện lên Cloudinary qua Backend API
+ * @param {File} file 
+ * @returns {Promise<string>}
+ */
+export const uploadEventBanner = async (file) => {
+  if (USE_MOCK) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return URL.createObjectURL(file);
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await apiClient.post('/media/upload/event-banner', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  const data = res?.data || res;
+  return data.url;
 };

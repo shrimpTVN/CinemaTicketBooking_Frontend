@@ -13,14 +13,14 @@ const normalizeUser = (user) => {
   if (!user) return null;
   return {
     id: user.id || null,
-    fullName: user.name || '',
+    fullName: user.fullName || user.name || '',
     email: user.email || '',
-    birthday: user.doB || '',
+    birthday: user.birthday || user.doB || '',
     phoneNumber: user.phoneNumber || '',
-    stars: user.point || 0,
+    stars: user.stars || user.point || 0,
     spending: user.spending || 0,
     avatar: user.avatar || '',
-    role: user.role ? user.role.toUpperCase() : 'USER',
+    role: user.role ? (typeof user.role === 'string' ? user.role.toUpperCase() : user.role.name?.toUpperCase() || 'USER') : 'USER',
   };
 };
 
@@ -56,11 +56,11 @@ export const login = async (credentials) => {
   // Kết nối API thật với Backend
   const res = await apiClient.post('/auth/login', credentials);
   const data = res?.data || res;
-  
-  // Trả về định dạng đúng và một token tượng trưng (vì token thật nằm trong HttpOnly Cookie)
+  const rawUser = data?.user || (data?.id ? data : null);
+
   return {
-    user: normalizeUser(data.user),
-    token: 'cookie-managed-token',
+    user: normalizeUser(rawUser),
+    token: data?.token || 'cookie-managed-token',
   };
 };
 
@@ -174,9 +174,10 @@ export const googleLogin = async (googleToken) => {
 
   const res = await apiClient.post('/auth/google', { token: googleToken });
   const data = res?.data || res;
+  const rawUser = data?.user || (data?.id ? data : null);
   return {
-    user: normalizeUser(data.user),
-    token: 'cookie-managed-token',
+    user: normalizeUser(rawUser),
+    token: data?.token || 'cookie-managed-token',
   };
 };
 

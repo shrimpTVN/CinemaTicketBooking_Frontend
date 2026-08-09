@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useTrailerStore } from '../store/trailerStore';
 import AgeRatingTag from './AgeRatingTag';
+import { preventOrphan } from '../utils/textUtils';
 
 export default function MovieCard({ movie }) {
   const navigate = useNavigate();
@@ -37,11 +38,6 @@ export default function MovieCard({ movie }) {
           {movie.ageRating && (
             <AgeRatingTag rating={movie.ageRating} />
           )}
-          {movie.rating && (
-            <span className="w-10 h-6 bg-zinc-900/90 text-gold text-[11px] rounded font-bold backdrop-blur-xs select-none flex items-center justify-center gap-0.5">
-              ★ {movie.rating}
-            </span>
-          )}
         </div>
 
         {/* Hover Action Overlay */}
@@ -63,11 +59,21 @@ export default function MovieCard({ movie }) {
 
       {/* Info Block */}
       <div className="mt-3 text-left">
-        <h3 className="text-label-custom font-bold text-text-main group-hover:text-cta-light transition-colors line-clamp-2 h-[44px] overflow-hidden">
-          {movie.title}
+        <h3 className="text-label-custom font-bold text-text-main line-clamp-2 h-[44px] overflow-hidden">
+          {preventOrphan(movie.title)}
         </h3>
-        <p className="text-body3 text-text-sub3 mt-1 truncate">
-          {movie.genre?.join(', ')} • {movie.duration} phút
+        <p className="text-body3 text-text-sub3 mt-1 flex items-center gap-1.5 overflow-hidden">
+          <span className="truncate">{movie.genre?.join(', ')}</span>
+          <span className="flex-shrink-0">•</span>
+          <span className="flex-shrink-0">{movie.duration} phút</span>
+          {Number(movie.rating) > 0 && (
+            <>
+              <span className="flex-shrink-0">•</span>
+              <span className="text-gold font-bold flex-shrink-0 flex items-center gap-0.5">
+                ★ {movie.rating}
+              </span>
+            </>
+          )}
         </p>
       </div>
     </div>

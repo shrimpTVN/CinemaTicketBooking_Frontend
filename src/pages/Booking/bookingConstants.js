@@ -67,9 +67,8 @@ export const COMBOS = [
 ];
 
 export const PAYMENT_METHODS = [
-  { id: 'MOMO', name: 'Ví MoMo', desc: 'Thanh toán qua ví điện tử MoMo', bg: '#a50e5f', letter: 'M' },
-  { id: 'ZALOPAY', name: 'ZaloPay', desc: 'Thanh toán qua ví điện tử ZaloPay', bg: '#0468e6', letter: 'Z' },
-  { id: 'VNPAY', name: 'VNPay', desc: 'Thanh toán qua cổng thanh toán VNPay', bg: '#005bab', letter: 'V' },
-  { id: 'BANK_CARD', name: 'Thẻ Visa / Mastercard', desc: 'Visa, Mastercard, JCB, American Express', bg: '#1a56db', letter: 'C' },
-  { id: 'CASH', name: 'Tiền mặt tại quầy', desc: 'Thanh toán trực tiếp tại quầy vé rạp', bg: '#15803d', letter: '₫' },
+  { id: 'VNPAY', name: 'Cổng thanh toán VNPAY', desc: 'Thanh toán quét mã QR qua ứng dụng ngân hàng hoặc thẻ ATM nội địa, thẻ quốc tế.', bg: '#005bab', letter: 'V' },
+  { id: 'MOMO', name: 'Ví MoMo', desc: 'Thanh toán nhanh chóng và bảo mật qua Ví điện tử MoMo.', bg: '#a50e5f', letter: 'M' },
+  { id: 'ZALOPAY', name: 'Ví ZaloPay', desc: 'Thanh toán trực tuyến dễ dàng và tiện lợi bằng ứng dụng Ví điện tử ZaloPay.', bg: '#0468e6', letter: 'Z' },
+  { id: 'BANK_CARD', name: 'Thẻ ngân hàng (ATM/Visa/Mastercard)', desc: 'Thanh toán trực tiếp bằng các loại thẻ ngân hàng nội địa (ATM) hoặc quốc tế (Visa, Mastercard, JCB).', bg: '#1a56db', letter: 'C' },
 ];

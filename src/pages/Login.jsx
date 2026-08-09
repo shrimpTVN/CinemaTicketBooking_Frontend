@@ -235,15 +235,14 @@ export default function Login() {
         });
 
         // Resolve user and token from backend response
-        const user = response.user || response.data?.user || response;
-        const token = response.token || response.data?.token;
+        const user = response.user || response.data?.user;
+        const token = response.token || response.data?.token || 'cookie-managed-token';
 
-        if (!user || !token) {
+        if (!user) {
           throw new Error('Dữ liệu phản hồi từ máy chủ không hợp lệ');
         }
 
         login(user, token);
-        alert('Đăng nhập thành công!');
         const from = location.state?.from || '/';
         const bookingState = location.state?.bookingState;
         if (from === '/booking') {
@@ -406,7 +405,11 @@ export default function Login() {
                   const token = data.token || 'cookie-managed-token';
                   authLogin(user, token);
                   const from = location.state?.from || '/';
-                  navigate(from, { replace: true });
+                  const bookingState = location.state?.bookingState;
+                  if (from === '/booking') {
+                    sessionStorage.setItem('booking_redirect_auth', 'true');
+                  }
+                  navigate(from, { state: bookingState, replace: true });
                 }}
                 onError={(msg) => {
                   setErrors({ api: msg });

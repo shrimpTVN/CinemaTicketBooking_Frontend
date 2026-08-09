@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getNowShowing, getComingSoon, updateSpecialList } from '../services/movieService';
 import MovieCard from '../components/MovieCard';
 import SectionHeading from '../components/SectionHeading';
+import ScrollReveal from '../components/ScrollReveal';
 
 // Skeleton Loader for Movie Cards Grid
 const CardSkeleton = () => (
@@ -17,8 +18,6 @@ export default function MovieList() {
   const [comingSoon, setComingSoon] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('default');
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -42,29 +41,6 @@ export default function MovieList() {
     fetchMovies();
   }, []);
 
-  // Filter and sort movie lists
-  const processMovies = (moviesList) => {
-    // 1. Filter by title or genre
-    let filtered = moviesList.filter(movie => 
-      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      movie.genre?.some(g => g.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-
-    // 2. Sort according to active selection
-    if (sortBy === 'rating') {
-      filtered.sort((a, b) => b.rating - a.rating);
-    } else if (sortBy === 'duration') {
-      filtered.sort((a, b) => b.duration - a.duration);
-    } else if (sortBy === 'title') {
-      filtered.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
-    }
-
-    return filtered;
-  };
-
-  const processedNowShowing = processMovies(nowShowing);
-  const processedComingSoon = processMovies(comingSoon);
-
   if (error) {
     return (
       <div className="bg-bg-dark text-text-main min-h-screen flex flex-col items-center justify-center gap-6 px-4">
@@ -81,80 +57,27 @@ export default function MovieList() {
 
   return (
     <div className="bg-bg-dark text-text-main min-h-screen pb-16">
-      {/* Search & Header Bar */}
-      <div className="max-w-7xl mx-auto px-4 py-8 text-left">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#222222] pb-6 mb-10">
-          <div>
-            <h1 className="text-heading1 text-text-main font-bold uppercase tracking-wider">Danh Sách Phim</h1>
-            <p className="text-body2 text-text-sub3 mt-1">Khám phá thế giới điện ảnh đỉnh cao tại rạp</p>
-          </div>
-
-          {/* Search and Sort controls */}
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-sub3">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </span>
-              <input 
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm tên phim, thể loại..."
-                className="w-full pl-10 pr-10 py-2 bg-zinc-900 border border-zinc-800 text-text-main rounded-lg focus:outline-hidden focus:border-cta text-body2 transition-all placeholder:text-text-sub3"
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-sub3 hover:text-text-main cursor-pointer"
-                  aria-label="Xóa từ khóa"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            {/* Sort Select */}
-            <div className="relative w-full sm:w-48 flex-shrink-0">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 text-text-main py-2 pl-4 pr-10 rounded-lg focus:outline-hidden focus:border-cta text-body2 transition-all cursor-pointer appearance-none"
-              >
-                <option value="default">Sắp xếp: Mặc định</option>
-                <option value="rating">Đánh giá cao nhất</option>
-                <option value="duration">Thời lượng dài nhất</option>
-                <option value="title">Tên phim (A-Z)</option>
-              </select>
-              <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-text-sub3">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
-            </div>
-          </div>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 pt-10 text-left">
         {/* 1. Showing Grid Section */}
         <div className="mb-14">
-          <SectionHeading className="mb-6">Phim Đang Chiếu</SectionHeading>
+          <ScrollReveal direction="up">
+            <SectionHeading className="mb-6">Phim Đang Chiếu</SectionHeading>
+          </ScrollReveal>
 
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {[1, 2, 3, 4].map(n => <CardSkeleton key={n} />)}
             </div>
-          ) : processedNowShowing.length === 0 ? (
+          ) : nowShowing.length === 0 ? (
             <div className="text-center py-16 bg-zinc-900/20 border border-zinc-800/50 rounded-2xl text-text-sub3 text-body2">
-              Không tìm thấy phim đang chiếu phù hợp.
+              Hiện tại chưa có phim đang chiếu.
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {processedNowShowing.map(movie => (
-                <MovieCard key={movie.id} movie={movie} />
+              {nowShowing.map((movie, idx) => (
+                <ScrollReveal key={movie.id} delay={(idx % 4) * 60} direction="up">
+                  <MovieCard movie={movie} />
+                </ScrollReveal>
               ))}
             </div>
           )}
@@ -162,20 +85,24 @@ export default function MovieList() {
 
         {/* 2. Coming Soon Grid Section */}
         <div>
-          <SectionHeading className="mb-6">Phim Sắp Chiếu</SectionHeading>
+          <ScrollReveal direction="up">
+            <SectionHeading className="mb-6">Phim Sắp Chiếu</SectionHeading>
+          </ScrollReveal>
 
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {[1, 2, 3, 4].map(n => <CardSkeleton key={n} />)}
             </div>
-          ) : processedComingSoon.length === 0 ? (
+          ) : comingSoon.length === 0 ? (
             <div className="text-center py-16 bg-zinc-900/20 border border-zinc-800/50 rounded-2xl text-text-sub3 text-body2">
-              Không tìm thấy phim sắp chiếu phù hợp.
+              Hiện tại chưa có phim sắp chiếu.
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {processedComingSoon.map(movie => (
-                <MovieCard key={movie.id} movie={movie} />
+              {comingSoon.map((movie, idx) => (
+                <ScrollReveal key={movie.id} delay={(idx % 4) * 60} direction="up">
+                  <MovieCard movie={movie} />
+                </ScrollReveal>
               ))}
             </div>
           )}

@@ -16,13 +16,9 @@ export default function ReviewForm({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
-          <input
-            type="text"
-            placeholder="Tên của bạn..."
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="bg-transparent border-b border-zinc-800 text-body2 text-text-main focus:outline-hidden focus:border-gold py-0.5 transition-colors placeholder:text-text-sub3 w-32 sm:w-40"
-          />
+          <span className="text-body2 font-semibold text-zinc-300 py-0.5 select-none max-w-[180px] sm:max-w-[240px] truncate block">
+            {username || 'Khách (Chưa đăng nhập)'}
+          </span>
         </div>
         {/* Star Selection Row */}
         <div className="flex items-center gap-0.5">

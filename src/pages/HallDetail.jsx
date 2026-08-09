@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import MovieCard from '../components/MovieCard';
 import { getNowShowing } from '../services/movieService';
-import { Info, Check, Calendar, CircleUser, Images, ArrowLeft } from 'lucide-react';
+import { getHallTypeById, getAllHallTypes, getAllSeatTypes } from '../services/hallService';
+import { getAllShowtimes } from '../services/showtimeService';
+import { Info, Images, ArrowLeft, Sparkles } from 'lucide-react';
 import SectionHeading from '../components/SectionHeading';
+import BackButton from '../components/BackButton';
+import ScrollReveal from '../components/ScrollReveal';
 
 const ROOMS_DATA = {
   '2d': {
@@ -245,6 +249,13 @@ const SEATS_DATA = [
   }
 ];
 
+const FALLBACK_SEAT_IMAGES = {
+  1: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=600&auto=format&fit=crop',
+  2: 'https://images.unsplash.com/photo-1585647347483-22b66260dfff?q=80&w=600&auto=format&fit=crop',
+  3: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=600&auto=format&fit=crop',
+  4: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=600&auto=format&fit=crop'
+};
+
 export default function HallDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -252,239 +263,216 @@ export default function HallDetail() {
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [nowShowingMovies, setNowShowingMovies] = useState([]);
+  const [showtimes, setShowtimes] = useState([]);
+  const [realSeatTypes, setRealSeatTypes] = useState([]);
+  const [realHallType, setRealHallType] = useState(null);
   const [loadingMovies, setLoadingMovies] = useState(false);
 
-  const currentRoom = ROOMS_DATA[id] || ROOMS_DATA['2d'];
-
-  const roomTypeName = id === '2d' ? '2D' :
-    id === '3d' ? '3D' :
-      id === 'imax' ? 'IMAX®' :
-        id === '4dx' ? '4DX®' :
-          id === 'screenx' ? 'ScreenX' :
-            id === 'starium' ? 'Starium' :
-              id === 'gold-class' ? 'Gold Class' :
-                id === 'lamour' ? 'L\'amour' :
-                  id === 'cine-living' ? 'Cine & Living' :
-                    id === 'cine-suite' ? 'Cine & Suite' :
-                      id === 'cine-foret' ? 'Cine & Forêt' : '2D';
-
-  // Fetch movies currently showing on mount
+  // Fetch hall type, seat types, movies, and showtimes from Backend API
   useEffect(() => {
-    const fetchMovies = async () => {
+    const fetchAllData = async () => {
       setLoadingMovies(true);
       try {
-        const movies = await getNowShowing();
-        setNowShowingMovies(movies);
+        const [hallTypeRes, allTypesRes, seatTypesRes, moviesRes, showtimesRes] = await Promise.allSettled([
+          id ? getHallTypeById(id) : Promise.resolve(null),
+          getAllHallTypes(),
+          getAllSeatTypes(),
+          getNowShowing(),
+          getAllShowtimes()
+        ]);
+
+        // 1. Hall Type
+        let fetchedType = hallTypeRes.status === 'fulfilled' ? hallTypeRes.value : null;
+        if (!fetchedType && allTypesRes.status === 'fulfilled' && Array.isArray(allTypesRes.value)) {
+          fetchedType = allTypesRes.value.find(t => String(t.id) === String(id) || t.name?.toLowerCase().includes(String(id).toLowerCase()));
+        }
+        if (fetchedType) setRealHallType(fetchedType);
+
+        // 2. Seat Types
+        if (seatTypesRes.status === 'fulfilled' && Array.isArray(seatTypesRes.value) && seatTypesRes.value.length > 0) {
+          setRealSeatTypes(seatTypesRes.value);
+        }
+
+        // 3. Movies & Showtimes
+        if (moviesRes.status === 'fulfilled' && Array.isArray(moviesRes.value)) {
+          setNowShowingMovies(moviesRes.value);
+        }
+        if (showtimesRes.status === 'fulfilled' && Array.isArray(showtimesRes.value)) {
+          setShowtimes(showtimesRes.value);
+        }
       } catch (err) {
-        console.error('Failed to load now showing movies for detail page', err);
+        console.error('Failed to load hall detail page data:', err);
       } finally {
         setLoadingMovies(false);
       }
     };
-    fetchMovies();
-  }, []);
+
+    fetchAllData();
+  }, [id]);
+
+  const defaultRoom = ROOMS_DATA[id] || ROOMS_DATA['2d'];
+  const currentRoom = realHallType ? {
+    name: realHallType.name || defaultRoom.name,
+    roomNumber: `LOẠI PHÒNG #${realHallType.id}`,
+    tagline: realHallType.convenience || defaultRoom.tagline,
+    description: realHallType.description || defaultRoom.description,
+    images: (Array.isArray(realHallType.images) && realHallType.images.length > 0) ? realHallType.images : defaultRoom.images,
+    features: [
+      { label: 'Phong cách', value: realHallType.style || 'Tiêu chuẩn' },
+      { label: 'Tiện ích & Âm thanh', value: realHallType.convenience || 'Đang cập nhật' }
+    ],
+    seats: defaultRoom.seats
+  } : defaultRoom;
+
+  const roomTypeName = realHallType?.name || (
+    id === '2d' ? '2D' :
+    id === '3d' ? '3D' :
+    id === 'imax' ? 'IMAX®' :
+    id === '4dx' ? '4DX®' :
+    id === 'screenx' ? 'ScreenX' :
+    id === 'starium' ? 'Starium' :
+    id === 'gold-class' ? 'Gold Class' :
+    id === 'lamour' ? 'L\'amour' :
+    id === 'cine-living' ? 'Cine & Living' :
+    id === 'cine-suite' ? 'Cine & Suite' :
+    id === 'cine-foret' ? 'Cine & Forêt' : '2D'
+  );
 
   const handleBack = () => {
-    // Navigate back to Hall list and restore category state
     navigate('/hall', { state: { category: location.state?.category || 'tech' } });
   };
 
-  // Filter movies playing in this hall dynamically
+  // Filter movies playing in this hall based on actual showtimes scheduled in this hall/hall type
   const getFilteredMovies = () => {
     if (!nowShowingMovies || nowShowingMovies.length === 0) return [];
 
-    // Assign movies dynamically based on format rules
-    switch (id) {
-      case 'imax':
-        return nowShowingMovies.filter(m =>
-          m.genre?.some(g => ['Hành Động', 'Viễn Tưởng', 'Phiêu Lưu'].includes(g)) || m.id === 3
-        );
-      case '4dx':
-      case 'screenx':
-      case 'starium':
-        return nowShowingMovies.filter(m =>
-          m.genre?.some(g => ['Hành Động', 'Gia Đình', 'Hài Hước'].includes(g)) || m.id === 2 || m.id === 3
-        );
-      case 'gold-class':
-      case 'cine-suite':
-        return nowShowingMovies.filter(m => m.id === 1 || m.id === 2);
-      case 'lamour':
-        return nowShowingMovies.filter(m =>
-          m.genre?.some(g => ['Tâm Lý', 'Tình Cảm', 'Gia Đình'].includes(g)) || m.id === 1
-        );
-      case 'cine-living':
-      case 'cine-foret':
-        return nowShowingMovies.filter(m =>
-          m.genre?.some(g => ['Gia Đình', 'Hài Hước'].includes(g)) || m.id === 2
-        );
-      case '2d':
-      case '3d':
-      default:
-        return nowShowingMovies;
+    // Filter showtimes belonging to this hall or hall type from backend API
+    if (Array.isArray(showtimes)) {
+      const activeMovieIds = new Set(
+        showtimes
+          .filter(st => {
+            const matchHallId = String(st.hallId) === String(id);
+            const matchHallName = st.hallName && st.hallName.toLowerCase().includes((roomTypeName || '').toLowerCase());
+            const matchType = st.type && st.type.toLowerCase().includes((roomTypeName || '').toLowerCase());
+            return matchHallId || matchHallName || matchType;
+          })
+          .map(st => Number(st.movieId))
+      );
+
+      // Return ONLY movies that actually have showtimes scheduled in this hall
+      return nowShowingMovies.filter(m => activeMovieIds.has(Number(m.id)));
     }
+
+    return [];
   };
 
   const filteredMovies = getFilteredMovies();
 
-  // Filter seats present in the active hall
-  const filteredSeats = SEATS_DATA.filter((seat) =>
-    currentRoom.seats?.includes(seat.id)
-  );
+
 
   return (
     <div className="bg-bg-dark text-text-main min-h-screen pt-8 pb-20">
-      {/* Back button and breadcrumb */}
-      <section className="max-w-7xl mx-auto px-4 mb-8">
-        <button
-          onClick={handleBack}
-          className="inline-flex items-center gap-2 text-body2 font-bold text-text-sub3 hover:text-white transition-colors cursor-pointer bg-zinc-900/60 border border-zinc-800 px-4 py-2 rounded-lg"
-        >
-          <ArrowLeft className="w-4 h-4 text-text-sub2" strokeWidth={2} />
-          Quay lại
-        </button>
+      {/* Back button */}
+      <section className="max-w-7xl mx-auto px-4 mb-8 text-left">
+        <BackButton label="Quay lại" to="/hall" />
       </section>
 
       {/* Room Details Block */}
       <section className="max-w-7xl mx-auto px-4 mb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start mb-16">
-          {/* Left Column: Image Gallery */}
-          <div className="lg:col-span-7 space-y-4">
-            {/* Main Image View */}
-            <div className="relative group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 aspect-[16/10] shadow-[0_0_25px_rgba(0,0,0,0.5)]">
-              <div className="absolute inset-0 border border-transparent group-hover:border-zinc-850 rounded-xl transition-all duration-300 pointer-events-none z-20"></div>
+        <ScrollReveal direction="up">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start mb-16">
+            {/* Left Column: Image Gallery */}
+            <div className="lg:col-span-7 space-y-4">
+              {/* Main Image View */}
+              <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 aspect-[16/10] shadow-[0_0_25px_rgba(0,0,0,0.5)]">
+                <img
+                  src={currentRoom.images[activeImageIndex] || currentRoom.images[0]}
+                  alt={currentRoom.name}
+                  className="w-full h-full object-cover z-10 transition-all duration-300"
+                />
 
-              <img
-                src={currentRoom.images[activeImageIndex]}
-                alt={currentRoom.name}
-                className="w-full h-full object-cover z-10"
-              />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/80 via-transparent to-transparent opacity-50 z-10 pointer-events-none"></div>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/80 via-transparent to-transparent opacity-50 z-10"></div>
-
-              {/* Image index badge */}
-              <span className="absolute top-4 right-4 bg-black/60 backdrop-blur-xs text-[11px] text-text-sub1 px-2.5 py-1 rounded-full border border-zinc-850 flex items-center gap-1.5 z-20">
-                <Images className="w-3.5 h-3.5 text-text-sub3" />
-                {activeImageIndex + 1} / {currentRoom.images.length}
-              </span>
-            </div>
-
-            {/* Thumbnails Row */}
-            <div className="grid grid-cols-4 gap-3">
-              {currentRoom.images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveImageIndex(idx)}
-                  className={`aspect-[16/10] rounded-lg overflow-hidden border transition-all relative group cursor-pointer ${activeImageIndex === idx
-                      ? 'border-white scale-[1.02] shadow-[0_0_10px_rgba(255,255,255,0.15)]'
-                      : 'border-zinc-800 opacity-60 hover:opacity-100 hover:border-zinc-700'
-                    }`}
-                >
-                  <img src={img} alt={`${currentRoom.name} thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Column: Room Details */}
-          <div className="lg:col-span-5 text-left space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-body3 bg-zinc-900 border border-zinc-800 text-text-sub2 px-2.5 py-1 rounded font-bold uppercase tracking-wider">
-                  {currentRoom.roomNumber}
+                {/* Image index badge */}
+                <span className="absolute top-4 right-4 bg-black/60 backdrop-blur-md text-[11px] text-text-sub1 px-2.5 py-1 rounded-full border border-zinc-700/60 flex items-center gap-1.5 z-20">
+                  <Images className="w-3.5 h-3.5 text-text-sub3" />
+                  {activeImageIndex + 1} / {currentRoom.images.length}
                 </span>
               </div>
-              <h2 className="text-heading1 font-bold text-white tracking-wide mb-2">
-                Phòng chiếu <span className="text-cta">{roomTypeName}</span>
-              </h2>
+
+              {/* Thumbnails Row (Clean Hover & Layout) */}
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                {currentRoom.images.map((img, idx) => {
+                  const isActive = activeImageIndex === idx;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageIndex(idx)}
+                      className={`relative w-24 sm:w-28 aspect-[16/10] rounded-xl overflow-hidden cursor-pointer shrink-0 transition-all duration-200 border-2 ${
+                        isActive
+                          ? 'border-white ring-2 ring-white/20 opacity-100 shadow-md scale-[1.02]'
+                          : 'border-zinc-800 opacity-50 hover:opacity-100 hover:border-zinc-500'
+                      }`}
+                    >
+                      <img
+                        src={img}
+                        alt={`${currentRoom.name} thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <p className="text-body2 text-text-sub2 leading-relaxed">
-              {currentRoom.description}
-            </p>
+            {/* Right Column: Room Details */}
+            <div className="lg:col-span-5 text-left space-y-6">
+              <div>
+                <span className="inline-block px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 text-[11px] font-bold uppercase tracking-wider mb-3">
+                  {currentRoom.roomNumber}
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-wide leading-tight">
+                  Phòng chiếu <span className="text-cta">{roomTypeName}</span>
+                </h2>
+              </div>
 
-            {/* Specification Features (Aligned columns for database compatibility) */}
-            <div className="border-t border-zinc-800 pt-6 space-y-4">
-              <h3 className="text-label-custom font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Info className="w-4 h-4 text-text-sub2" />
-                Thông số phòng chiếu
-              </h3>
-              <div className="grid grid-cols-1 gap-3">
-                {currentRoom.features.map((feature, idx) => (
-                  <div key={idx} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 border-b border-zinc-800/40 pb-2">
-                    <span className="text-body3 text-text-sub3 w-32 flex-shrink-0 font-medium">{feature.label}:</span>
-                    <span className="text-body2 text-text-sub1 font-light">
-                      {feature.value}
-                    </span>
-                  </div>
-                ))}
+              {/* Mô tả */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Mô tả
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                  {currentRoom.description}
+                </p>
+              </div>
+
+              {/* Tiện ích */}
+              <div className="border-t border-zinc-800/80 pt-6 space-y-2">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Tiện ích
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                  {realHallType?.convenience || currentRoom.tagline || 'Đang cập nhật'}
+                </p>
               </div>
             </div>
           </div>
-        </div>
+        </ScrollReveal>
       </section>
 
-      {/* Seats Available in THIS Room Section (Clean design, minimal colors) */}
-      <section className="bg-zinc-950/40 border-t border-b border-[#222222] py-16 md:py-20">
-        <div className="max-w-7xl mx-auto px-4">
-          <SectionHeading hasBorder={true} className="mb-10">
-            Loại ghế có trong phòng chiếu này
-          </SectionHeading>
-
-          {/* Seats Cards Flex Layout (centered automatically for any number of seats) */}
-          <div className="flex flex-wrap gap-6 justify-center max-w-5xl mx-auto">
-            {filteredSeats.map((seat) => (
-              <div
-                key={seat.id}
-                className="w-full sm:w-[320px] bg-zinc-900/40 border border-zinc-850 rounded-xl overflow-hidden flex flex-col hover:-translate-y-1 transition-all duration-300 shadow-md hover:shadow-lg group hover:border-white"
-              >
-                {/* Seat Type Image */}
-                <div className="aspect-[16/10] w-full overflow-hidden bg-zinc-950 border-b border-zinc-850">
-                  <img
-                    src={seat.image}
-                    alt={seat.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                </div>
-
-                {/* Seat Type Content */}
-                <div className="p-5 flex flex-col flex-grow justify-between gap-2 text-left">
-                  <div>
-                    <h4 className="text-subtitle font-bold text-white mb-2">
-                      {seat.name}
-                    </h4>
-                    <p className="text-body3 text-text-sub2 leading-relaxed font-light">
-                      {seat.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Seating note panel */}
-          <div className="mt-12 p-6 bg-zinc-900/60 border border-zinc-800 rounded-xl max-w-3xl mx-auto flex items-start gap-4">
-            <Info className="w-6 h-6 text-text-sub2 flex-shrink-0 mt-0.5" />
-            <div className="text-left space-y-1.5">
-              <h4 className="text-label-custom font-bold text-white">Lưu ý khi đặt vé</h4>
-              <p className="text-body3 text-text-sub2 leading-relaxed">
-                Từng phòng chiếu được sắp xếp các kiểu ghế tối ưu riêng biệt. Khi tiến hành đặt vé cho suất chiếu tại phòng này, hệ thống sơ đồ ghế ngồi sẽ chỉ hiển thị các loại ghế ở trên. Quý khách vui lòng lưu ý vị trí ghế để có trải nghiệm xem phim hoàn mỹ nhất.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Movies Showing In This Hall Section (4-column layout on large screens) */}
+      {/* Movies Showing In This Hall Section (Real Showtimes Filtered) */}
       <section className="border-t border-zinc-850 py-16 md:py-20 bg-zinc-950/20">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between mb-8 pb-4 border-b border-zinc-800/80">
-            <SectionHeading>
-              Phim đang chiếu tại {roomTypeName}
-            </SectionHeading>
-            <span className="text-body3 text-text-sub3 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-full font-medium">
-              Có {filteredMovies.length} phim
-            </span>
-          </div>
+          <ScrollReveal direction="up">
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-zinc-800/80">
+              <SectionHeading>
+                Phim đang chiếu tại {roomTypeName}
+              </SectionHeading>
+              <span className="text-body3 text-text-sub3 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-full font-medium">
+                Có {filteredMovies.length} phim
+              </span>
+            </div>
+          </ScrollReveal>
 
           {loadingMovies ? (
             <div className="py-12 flex justify-center items-center gap-2">
@@ -497,8 +485,10 @@ export default function HallDetail() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-6xl mx-auto justify-center">
-              {filteredMovies.map((movie) => (
-                <MovieCard key={movie.id} movie={movie} />
+              {filteredMovies.map((movie, idx) => (
+                <ScrollReveal key={movie.id} delay={(idx % 4) * 60} direction="up">
+                  <MovieCard movie={movie} />
+                </ScrollReveal>
               ))}
             </div>
           )}

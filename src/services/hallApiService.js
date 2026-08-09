@@ -91,6 +91,19 @@ export const getAllHallTypes = async () => {
 };
 
 /**
+ * Lấy chi tiết loại phòng chiếu theo ID từ CSDL
+ */
+export const getHallTypeById = async (id) => {
+  try {
+    const res = await apiClient.get(`/hall-types/${id}`);
+    return res?.data || res;
+  } catch (error) {
+    console.error(`getHallTypeById (${id}) API error:`, error);
+    return null;
+  }
+};
+
+/**
  * Lấy danh sách loại ghế từ CSDL
  */
 export const getAllSeatTypes = async () => {

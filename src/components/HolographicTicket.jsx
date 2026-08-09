@@ -214,7 +214,7 @@ export default function HolographicTicket({ ticket }) {
             {/* Total price */}
             <div className="text-center mt-5 md:mt-0">
               <p className="text-text-sub3 text-[9px] uppercase tracking-wider font-bold mb-0.5">Tổng cộng</p>
-              <p className="text-2xl font-black text-cta-light leading-none">{fmtVND(total)}</p>
+              <p className="text-2xl font-black text-gold leading-none">{fmtVND(total)}</p>
             </div>
 
           </div>

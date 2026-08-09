@@ -13,7 +13,7 @@ export default function GoogleLoginButton({ onSuccess, onError, text = 'Tiếp t
       console.log('>>> [GoogleAuth] Received ID Token from Google GIS, verifying with Backend...');
       const res = await googleLogin(response.credential);
       if (res?.user) {
-        onSuccess?.(res.user);
+        onSuccess?.(res);
       }
     } catch (err) {
       console.error('[GoogleLogin] Authentication error:', err);
@@ -72,11 +72,6 @@ export default function GoogleLoginButton({ onSuccess, onError, text = 'Tiếp t
     }
 
     try {
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleResponse,
-      });
-
       window.google.accounts.id.prompt((notification) => {
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
           // If prompt notification is blocked by browser, attempt to click native overlay button

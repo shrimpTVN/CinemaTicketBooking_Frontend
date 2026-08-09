@@ -173,7 +173,11 @@ export default function RegisterFormStep1({ formData, errors, handleChange, hand
           const token = data.token || 'cookie-managed-token';
           authLogin(user, token);
           const from = locationState?.from || '/';
-          navigate(from, { replace: true });
+          const bookingState = locationState?.bookingState;
+          if (from === '/booking') {
+            sessionStorage.setItem('booking_redirect_auth', 'true');
+          }
+          navigate(from, { state: bookingState, replace: true });
         }}
         onError={(msg) => {
           console.error("Google Auth error:", msg);

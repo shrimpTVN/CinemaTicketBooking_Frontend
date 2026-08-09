@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { Camera, Trophy, X } from 'lucide-react';
+import { Camera, Trophy } from 'lucide-react';
 import TabFilter from '../../components/TabFilter';
-import HolographicTicket from '../../components/HolographicTicket';
+import CinemaTicketModal from '../../components/CinemaTicketModal';
 import { changePassword, updateProfile } from '../../services/authService';
 import { USE_MOCK } from '../../services/apiConfig';
 import apiClient from '../../services/apiClient';
 import { getNowShowing } from '../../services/movieService';
+import ScrollReveal from '../../components/ScrollReveal';
 
 // Sub-components
 import PasswordModal from './components/PasswordModal';
@@ -97,7 +98,7 @@ export default function Profile() {
     } catch (e) {
       console.error("Error loading local tickets", e);
     }
-  }, []);
+  }, [location, activeTab]);
 
   useEffect(() => {
     if (!USE_MOCK && user && user.id) {
@@ -354,70 +355,93 @@ export default function Profile() {
   };
 
   const allTickets = useMemo(() => {
-    if (USE_MOCK) {
-      const adaptedLocal = localTickets.map(t => ({
-        id: t.ticketCode,
-        title: t.movie.title,
-        poster: t.movie.posterUrl,
-        theater: 'Galaxy Cinema',
-        room: t.showtime.room,
-        date: t.date.dateLabel,
-        time: `${t.showtime.start} ~ ${t.showtime.end || ''}`,
-        seats: t.seats.join(', '),
-        combo: t.combos ? t.combos.join(', ') : 'Không kèm combo',
-        price: t.total,
+    // Adapt local tickets saved in localStorage (from SuccessScreen)
+    const adaptedLocal = (localTickets || []).map((t) => {
+      const seatStr = Array.isArray(t.seats)
+        ? t.seats
+            .map((s) => (typeof s === 'object' ? (s.id || `${s.seatRowLabel || ''}${s.seatColNumber || ''}`) : s))
+            .filter(Boolean)
+            .join(', ')
+        : String(t.seats || '');
+
+      return {
+        id: t.ticketCode || `INV-${Date.now()}`,
+        title: t.movie?.title || 'Vé xem phim',
+        poster: t.movie?.posterUrl || '',
+        theater: t.theater || 'Galaxy Cinema',
+        room: t.showtime?.room || '',
+        date: t.date?.dateLabel || t.bookingDate || '',
+        time: `${t.showtime?.start || ''} ${t.showtime?.end ? '~ ' + t.showtime.end : ''}`.trim(),
+        seats: seatStr || 'Chưa xác định',
+        combo: Array.isArray(t.combos) && t.combos.length > 0 ? t.combos.join(', ') : 'Không kèm combo',
+        price: Number(t.total || 0),
         status: 'Thành công',
-        format: t.showtime.format,
-        lang: t.showtime.lang,
-        ageRating: t.movie.ageRating,
+        format: t.showtime?.format || '2D',
+        lang: t.showtime?.lang || 'Phụ đề',
+        ageRating: t.movie?.ageRating || 'P',
         isLocal: true,
-        rawTicket: t
-      }));
+        rawTicket: t,
+      };
+    });
+
+    if (USE_MOCK) {
       return [...adaptedLocal, ...mockTickets];
     }
 
-    // HÓA ĐƠN THẬT TỪ DATABASE (chỉ hiển thị hóa đơn đã thanh toán thành công):
-    const paidInvoices = dbInvoices.filter(inv => inv.status === 'PAID');
+    // Real DB Invoices (status === 'PAID' or 'COMPLETED' or 'SUCCESS' or 'HELD')
+    const paidInvoices = (dbInvoices || []).filter(
+      (inv) => inv.status === 'PAID' || inv.status === 'COMPLETED' || inv.status === 'SUCCESS'
+    );
 
-    return paidInvoices.map(inv => {
-      const movieObj = moviesList.find(m => m.id === inv.showtime.movieId);
+    const mappedDbTickets = paidInvoices.map((inv) => {
+      const movieObj = moviesList.find((m) => m.id === inv.showtime?.movieId);
       const poster = movieObj?.posterUrl || '';
       const ageRating = movieObj?.ageRating || 'P';
 
-      const seatLabels = inv.tickets.map(t => t.seatRowLabel + t.seatColNumber).join(', ');
-      const comboLabels = inv.products.length > 0
-        ? inv.products.map(p => `${p.quantity}x ${p.productName}`).join(', ')
-        : 'Không kèm combo';
+      const seatLabels = (inv.tickets || [])
+        .map((t) => (t.seatRowLabel && t.seatColNumber ? `${t.seatRowLabel}${t.seatColNumber}` : t.displayName || t.id || ''))
+        .filter(Boolean)
+        .join(', ');
+      const comboLabels =
+        (inv.products || []).length > 0
+          ? inv.products.map((p) => `${p.quantity}x ${p.productName}`).join(', ')
+          : 'Không kèm combo';
 
-      let formattedDate = inv.showtime.date;
+      let formattedDate = inv.showtime?.date;
       try {
-        if (inv.showtime.date) {
+        if (inv.showtime?.date) {
           const d = new Date(inv.showtime.date);
           formattedDate = d.toLocaleDateString('vi-VN');
         }
       } catch (e) {}
 
-      const startTime = inv.showtime.startTime ? inv.showtime.startTime.substring(0, 5) : '';
+      const startTime = inv.showtime?.startTime ? inv.showtime.startTime.substring(0, 5) : '';
 
       return {
-        id: `INV${inv.invoiceId}`,
-        title: inv.showtime.movieName,
+        id: String(inv.invoiceId).startsWith('INV') ? inv.invoiceId : `INV${inv.invoiceId}`,
+        title: inv.showtime?.movieName || 'Phim',
         poster,
-        theater: 'Galaxy Cinema',
-        room: inv.showtime.hallName || 'Phòng 3',
+        theater: 'Rạp chiếu phim',
+        room: inv.showtime?.hallName || 'Phòng 3',
         date: formattedDate,
+        rawDate: inv.showtime?.date,
         time: startTime,
-        seats: seatLabels,
+        seats: seatLabels || 'Chưa xác định',
         combo: comboLabels,
-        price: Number(inv.totalAmount),
+        price: Number(inv.totalAmount || 0),
         status: 'Thành công',
-        format: inv.showtime.type || '2D',
+        format: inv.showtime?.type || '2D',
         lang: 'Phụ đề',
         ageRating,
         isLocal: false,
-        rawInvoice: inv
+        rawInvoice: inv,
       };
     });
+
+    const dbTicketCodes = new Set(mappedDbTickets.map((t) => String(t.id)));
+    const uniqueLocalTickets = adaptedLocal.filter((t) => !dbTicketCodes.has(String(t.id)));
+
+    return [...mappedDbTickets, ...uniqueLocalTickets];
   }, [dbInvoices, moviesList, localTickets]);
 
   const handleTicketClick = (ticket) => {
@@ -425,6 +449,7 @@ export default function Profile() {
       const inv = ticket.rawInvoice;
       const ticketToView = {
         ticketCode: `INV${inv.invoiceId}`,
+        theater: ticket.theater || 'Rạp chiếu phim',
         movie: {
           title: inv.showtime.movieName,
           posterUrl: ticket.poster,
@@ -438,6 +463,7 @@ export default function Profile() {
         },
         date: {
           dateLabel: ticket.date,
+          rawDate: inv.showtime.date,
           dayLabel: ''
         },
         seats: inv.tickets.map(t => ({ id: t.seatRowLabel + t.seatColNumber })),
@@ -516,147 +542,151 @@ export default function Profile() {
 
         {/* LEFT COLUMN: Sidebar Card */}
         <div className="profile-sidebar-col w-full flex flex-col gap-6">
-          <div className="relative rounded-2xl p-6 bg-zinc-900/50 backdrop-blur-md border border-zinc-800/80 shadow-2xl overflow-hidden profile-card">
+          <ScrollReveal direction="right">
+            <div className="relative rounded-2xl p-6 bg-zinc-900/50 backdrop-blur-md border border-zinc-800/80 shadow-2xl overflow-hidden profile-card">
 
-            {/* Visual spotlight */}
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none overflow-hidden"
-              style={{
-                background: 'radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 70%)',
-                mixBlendMode: 'screen',
-              }}
-            />
+              {/* Visual spotlight */}
+              <div
+                className="absolute inset-0 rounded-2xl pointer-events-none overflow-hidden"
+                style={{
+                  background: 'radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 70%)',
+                  mixBlendMode: 'screen',
+                }}
+              />
 
-            <div className="relative z-10 flex flex-col gap-5 text-left">
-              {/* Avatar and Name */}
-              <div className="flex items-center gap-5 text-left px-1">
-                <div className="relative group w-20 h-20 rounded-full overflow-hidden border border-zinc-700 bg-zinc-800/60 flex-shrink-0 flex items-center justify-center cursor-pointer shadow">
-                  {user.avatar ? (
-                    <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <Camera className="w-8 h-8 text-zinc-500 group-hover:scale-105 transition-transform duration-300" />
-                  )}
-                  {/* Upload Overlay */}
-                  <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-200">
-                    <Camera className="w-5 h-5 text-white" />
-                    <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                  </label>
-                </div>
+              <div className="relative z-10 flex flex-col gap-5 text-left">
+                {/* Avatar and Name */}
+                <div className="flex items-center gap-5 text-left px-1">
+                  <div className="relative group w-20 h-20 rounded-full overflow-hidden border border-zinc-700 bg-zinc-800/60 flex-shrink-0 flex items-center justify-center cursor-pointer shadow">
+                    {user.avatar ? (
+                      <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="w-8 h-8 text-zinc-500 group-hover:scale-105 transition-transform duration-300" />
+                    )}
+                    {/* Upload Overlay */}
+                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-200">
+                      <Camera className="w-5 h-5 text-white" />
+                      <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                    </label>
+                  </div>
 
-                <div className="min-w-0 text-left">
-                  <h3 className="text-body1 font-bold text-white tracking-wide truncate">
-                    {formData.fullName}
-                  </h3>
-                  <p className="text-body3 text-zinc-500 mt-0.5 font-medium">
-                    {user.stars || 0} sao
-                  </p>
-                </div>
-              </div>
-
-              <hr className="border-zinc-800/80 my-1" />
-
-              {/* Total Spending */}
-              <div className="flex justify-between items-center px-1 text-left">
-                <span className="text-body2 text-zinc-400 font-medium">Tổng cộng trong năm 2026</span>
-                <span className="text-body2 font-bold text-white">0 đ</span>
-              </div>
-
-              {/* Progress Milestones */}
-              <div className="px-1 mt-2 select-none relative mb-2">
-                <div className="flex justify-between items-center relative z-10 mb-2">
-                  {[1, 2, 3].map((m) => (
-                    <div key={m} className="flex flex-col items-center">
-                      <Trophy className="w-5 h-5 text-zinc-500" />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="h-2 w-full bg-zinc-800 rounded-full relative overflow-visible mb-2">
-                  <div className="h-full bg-zinc-500 rounded-full" style={{ width: `8%` }} />
-                  <div className="absolute inset-0 flex justify-between items-center pointer-events-none">
-                    {[1, 2, 3].map((m, idx) => (
-                      <div
-                        key={m}
-                        className="w-3.5 h-3.5 rounded-full border transition-all duration-300"
-                        style={{
-                          background: idx === 0 ? '#8a8a8a' : '#16161a',
-                          borderColor: '#555555',
-                          transform: 'translateY(-0.5px)',
-                        }}
-                      />
-                    ))}
+                  <div className="min-w-0 text-left">
+                    <h3 className="text-body1 font-bold text-white tracking-wide truncate">
+                      {formData.fullName}
+                    </h3>
+                    <p className="text-body3 text-zinc-500 mt-0.5 font-medium">
+                      {user.stars || 0} sao
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex justify-between text-body3 font-medium text-zinc-500">
-                  <span className="text-[11px]">0 đ</span>
-                  <span className="text-[11px]">0 đ</span>
-                  <span className="text-[11px]">0 đ</span>
+                <hr className="border-zinc-800/80 my-1" />
+
+                {/* Total Spending */}
+                <div className="flex justify-between items-center px-1 text-left">
+                  <span className="text-body2 text-zinc-400 font-medium">Tổng cộng trong năm 2026</span>
+                  <span className="text-body2 font-bold text-white">0 đ</span>
+                </div>
+
+                {/* Progress Milestones */}
+                <div className="px-1 mt-2 select-none relative mb-2">
+                  <div className="flex justify-between items-center relative z-10 mb-2">
+                    {[1, 2, 3].map((m) => (
+                      <div key={m} className="flex flex-col items-center">
+                        <Trophy className="w-5 h-5 text-zinc-500" />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="h-2 w-full bg-zinc-800 rounded-full relative overflow-visible mb-2">
+                    <div className="h-full bg-zinc-500 rounded-full" style={{ width: `8%` }} />
+                    <div className="absolute inset-0 flex justify-between items-center pointer-events-none">
+                      {[1, 2, 3].map((m, idx) => (
+                        <div
+                          key={m}
+                          className="w-3.5 h-3.5 rounded-full border transition-all duration-300"
+                          style={{
+                            background: idx === 0 ? '#8a8a8a' : '#16161a',
+                            borderColor: '#555555',
+                            transform: 'translateY(-0.5px)',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-body3 font-medium text-zinc-500">
+                    <span className="text-[11px]">0 đ</span>
+                    <span className="text-[11px]">0 đ</span>
+                    <span className="text-[11px]">0 đ</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </ScrollReveal>
         </div>
 
         {/* RIGHT COLUMN: Content with Tabs */}
         <div className="profile-content-col w-full flex flex-col">
-          <TabFilter
-            tabs={[
-              { id: 'info', label: 'Thông tin' },
-              { id: 'history', label: 'Lịch sử giao dịch' },
-              { id: 'rewards', label: 'Phần thưởng' },
-              { id: 'privacy', label: 'Chính sách bảo mật' }
-            ]}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            centered={true}
-            variant="select"
-          />
-
-          <div className="relative rounded-2xl p-6 md:p-8 bg-zinc-900/50 backdrop-blur-md border border-zinc-800/80 shadow-2xl info-card min-h-[460px]">
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none overflow-hidden"
-              style={{
-                background: 'radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 70%)',
-                mixBlendMode: 'screen',
-              }}
+          <ScrollReveal direction="up">
+            <TabFilter
+              tabs={[
+                { id: 'info', label: 'Thông tin' },
+                { id: 'history', label: 'Lịch sử giao dịch' },
+                { id: 'rewards', label: 'Phần thưởng' },
+                { id: 'privacy', label: 'Chính sách bảo mật' }
+              ]}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              centered={true}
+              variant="select"
             />
 
-            {/* Render Active Tab */}
-            {activeTab === 'info' && (
-              <InfoTab
-                user={user}
-                formData={formData}
-                errors={errors}
-                handleInputChange={handleInputChange}
-                isEditing={isEditing}
-                handleCancelEdit={handleCancelEdit}
-                handleSaveInfo={handleSaveInfo}
-                setIsEditing={setIsEditing}
-                setIsEmailModalOpen={setIsEmailModalOpen}
-                setIsPasswordModalOpen={setIsPasswordModalOpen}
+            <div className="relative rounded-2xl p-6 md:p-8 bg-zinc-900/50 backdrop-blur-md border border-zinc-800/80 shadow-2xl info-card min-h-[460px]">
+              <div
+                className="absolute inset-0 rounded-2xl pointer-events-none overflow-hidden"
+                style={{
+                  background: 'radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 70%)',
+                  mixBlendMode: 'screen',
+                }}
               />
-            )}
 
-            {activeTab === 'history' && (
-              <HistoryTab
-                allTickets={allTickets}
-                handleTicketClick={handleTicketClick}
-              />
-            )}
+              {/* Render Active Tab */}
+              {activeTab === 'info' && (
+                <InfoTab
+                  user={user}
+                  formData={formData}
+                  errors={errors}
+                  handleInputChange={handleInputChange}
+                  isEditing={isEditing}
+                  handleCancelEdit={handleCancelEdit}
+                  handleSaveInfo={handleSaveInfo}
+                  setIsEditing={setIsEditing}
+                  setIsEmailModalOpen={setIsEmailModalOpen}
+                  setIsPasswordModalOpen={setIsPasswordModalOpen}
+                />
+              )}
 
-            {activeTab === 'rewards' && (
-              <RewardsTab
-                user={user}
-                mockVouchers={mockVouchers}
-                handleCopyCode={handleCopyCode}
-              />
-            )}
+              {activeTab === 'history' && (
+                <HistoryTab
+                  allTickets={allTickets}
+                  handleTicketClick={handleTicketClick}
+                />
+              )}
 
-            {activeTab === 'privacy' && (
-              <PrivacyTab />
-            )}
-          </div>
+              {activeTab === 'rewards' && (
+                <RewardsTab
+                  user={user}
+                  mockVouchers={mockVouchers}
+                  handleCopyCode={handleCopyCode}
+                />
+              )}
+
+              {activeTab === 'privacy' && (
+                <PrivacyTab />
+              )}
+            </div>
+          </ScrollReveal>
         </div>
 
       </div>
@@ -698,24 +728,10 @@ export default function Profile() {
 
       {/* Ticket Detail Modal */}
       {selectedTicketForModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/85 backdrop-blur-sm cursor-pointer"
-            onClick={() => setSelectedTicketForModal(null)}
-          />
-          <div className="relative z-10 w-full max-w-2xl transform scale-100 transition-all flex flex-col items-center">
-            <button
-              onClick={() => setSelectedTicketForModal(null)}
-              className="absolute -top-12 right-2 text-zinc-400 hover:text-white transition-colors bg-zinc-900/60 p-2 rounded-full border border-zinc-800 cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-full">
-              <HolographicTicket ticket={selectedTicketForModal} />
-            </div>
-            <p className="text-center text-xs text-zinc-500 mt-2 select-none">Di chuyển chuột qua vé để xem hiệu ứng phản quang 3D</p>
-          </div>
-        </div>
+        <CinemaTicketModal
+          ticket={selectedTicketForModal}
+          onClose={() => setSelectedTicketForModal(null)}
+        />
       )}
 
       {/* Styled JSX */}

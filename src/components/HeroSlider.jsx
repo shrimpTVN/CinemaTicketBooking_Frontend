@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Navigation, Pagination } from 'swiper/modules';
@@ -42,8 +42,17 @@ export default function HeroSlider({ movies }) {
   const navigate = useNavigate();
   const { openTrailer } = useTrailerStore();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const mainSwiperRef = useRef(null);
   const thumbsSwiperRef = useRef(null);
+
+  useEffect(() => {
+    setIsVideoReady(false);
+    const timer = setTimeout(() => {
+      setIsVideoReady(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [activeIndex]);
 
   if (!movies || movies.length === 0) return null;
 
@@ -97,18 +106,17 @@ export default function HeroSlider({ movies }) {
   const getEmbedUrl = (url) => {
     const videoId = getVideoId(url);
     if (!videoId) {
-      return 'https://www.youtube.com/embed/jZ1S0P9QWws';
+      return 'https://www.youtube-nocookie.com/embed/jZ1S0P9QWws';
     }
-    return `https://www.youtube.com/embed/${videoId}`;
+    return `https://www.youtube-nocookie.com/embed/${videoId}`;
   };
 
   return (
-    <div className="relative w-full bg-bg-dark border-b border-[#222222]">
+    <div className="relative w-full bg-bg-dark">
       {/* 1. Main Slide Area: Full-width Trailer Background Banner */}
       <Swiper
-        modules={[Autoplay, Navigation, Pagination]}
-        autoplay={{ delay: 8000, disableOnInteraction: false }}
-        pagination={{ clickable: true }}
+        modules={[Autoplay, Navigation]}
+        autoplay={{ delay: 20000, disableOnInteraction: false }}
         onSwiper={(swiper) => (mainSwiperRef.current = swiper)}
         onSlideChange={handleSlideChange}
         className="w-full h-[56.25vw] md:h-[520px] hero-swiper"
@@ -128,13 +136,29 @@ export default function HeroSlider({ movies }) {
             <SwiperSlide key={movie.id} className="relative w-full h-full group">
               {/* YouTube Video Background (Desktop only) */}
               <div className="hidden md:block absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none bg-black">
-                <iframe
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full md:w-[100vw] md:h-[56.25vw] md:min-h-[100vh] md:min-w-[177.77vh] scale-105 opacity-80"
-                  src={`${embedUrl}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&playsinline=1&enablejsapi=1&showinfo=0&rel=0`}
-                  title={movie.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                ></iframe>
+                {/* Backdrop poster image: covers the iframe during initial 1.8s buffering so YouTube UI controls stay completely hidden */}
+                <img
+                  src={youtubeThumbnail}
+                  alt=""
+                  onError={(e) => { e.currentTarget.src = youtubeThumbnailFallback; }}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 scale-[1.05] z-10 ${
+                    index === activeIndex && isVideoReady ? 'opacity-0' : 'opacity-85'
+                  }`}
+                />
+
+                {index === activeIndex && (
+                  <iframe
+                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] md:w-[100vw] md:h-[56.25vw] md:min-h-[100vh] md:min-w-[177.77vh] scale-[1.45] transition-opacity duration-1000 pointer-events-none select-none z-0 ${
+                      isVideoReady ? 'opacity-85' : 'opacity-0'
+                    }`}
+                    src={`${embedUrl}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&playsinline=1&enablejsapi=1&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1&disablekb=1&fs=0&autohide=1&cc_load_policy=0`}
+                    title={movie.title}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  ></iframe>
+                )}
               </div>
 
               {/* YouTube Thumbnail Background (Mobile only) */}
@@ -168,9 +192,11 @@ export default function HeroSlider({ movies }) {
                   {/* Metadata Row: Outlined Capsule Badges (IMDb/Rating, Age, Year, Duration) */}
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 md:gap-3 mb-3 md:mb-6 text-[10px] md:text-body3">
                     {/* Rating capsule */}
-                    <span className="border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 rounded text-gold font-bold">
-                      ★ {movie.rating}
-                    </span>
+                    {movie.rating > 0 && (
+                      <span className="border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 rounded text-gold font-bold">
+                        ★ {movie.rating}
+                      </span>
+                    )}
                     {/* Age rating capsule */}
                     {movie.ageRating && (
                       <AgeRatingTag rating={movie.ageRating} variant="hero" className="border-zinc-700 bg-zinc-900/60 px-2" />
@@ -188,13 +214,13 @@ export default function HeroSlider({ movies }) {
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => handleBooking(movie.id)}
-                      className="bg-cta text-text-main text-[11px] sm:text-body3 px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded font-bold hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
+                      className="bg-cta text-text-main text-[11px] sm:text-xs md:text-sm font-bold font-google-sans px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded hover:bg-opacity-90 transition-colors uppercase cursor-pointer"
                     >
                       Mua vé
                     </button>
                     <button
                       onClick={() => navigate(`/movies/${movie.id}`)}
-                      className="border border-zinc-500 text-text-sub2 text-[11px] sm:text-body3 px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded font-bold hover:bg-white hover:text-text-main hover:bg-white/5 transition-all uppercase cursor-pointer"
+                      className="border border-zinc-500 text-text-sub2 text-[11px] sm:text-xs md:text-sm font-bold font-google-sans px-4 h-8 md:px-6 md:h-11 flex items-center justify-center rounded hover:bg-white hover:text-text-main hover:bg-white/5 transition-all uppercase cursor-pointer"
                     >
                       Chi tiết
                     </button>
@@ -227,7 +253,7 @@ export default function HeroSlider({ movies }) {
       {/* 2. Bottom Sliding Posters: Trending List below the Banner */}
       <div className="max-w-7xl mx-auto px-4 py-8 relative">
         <div className="flex justify-between items-center mb-6">
-          <SectionHeading uppercase={false}>Trending</SectionHeading>
+          <SectionHeading>Trending</SectionHeading>
 
           {/* Thumbnails Navigation Arrows */}
           <div className="flex space-x-2">

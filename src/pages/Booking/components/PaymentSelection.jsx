@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { PAYMENT_METHODS } from '../bookingConstants';
 import { useBookingStore } from '../../../store/bookingStore';
 
@@ -12,9 +13,10 @@ const methodStyling = {
 
 export default function PaymentSelection({ booking, setBooking }) {
   const dbPaymentMethods = useBookingStore((state) => state.paymentMethods);
+  const [toastMessage, setToastMessage] = useState(null);
 
   // If we have payment methods loaded from backend, use them. Otherwise fallback to hardcoded constants.
-  const displayedMethods = dbPaymentMethods.length > 0
+  const rawMethods = dbPaymentMethods.length > 0
     ? dbPaymentMethods
         .filter(pm => pm.status === 'ON')
         .map(pm => {
@@ -26,13 +28,37 @@ export default function PaymentSelection({ booking, setBooking }) {
             desc: pm.description,
             bg: style.bg,
             letter: style.letter,
-            logo: pm.logo, // Get the image logo from DB
+            logo: pm.logo,
           };
         })
     : PAYMENT_METHODS;
 
+  // Always ensure VNPAY is at the top of the list
+  const displayedMethods = [...rawMethods].sort((a, b) => {
+    if (a.id === 'VNPAY') return -1;
+    if (b.id === 'VNPAY') return 1;
+    return 0;
+  });
+
+  const handleSelectMethod = (methodId, methodName) => {
+    if (methodId !== 'VNPAY') {
+      setToastMessage(`Cổng thanh toán ${methodName} đang bảo trì. Vui lòng chọn cổng VNPAY!`);
+      setTimeout(() => setToastMessage(null), 4000);
+      setBooking((b) => ({ ...b, payment: 'VNPAY' }));
+    } else {
+      setBooking((b) => ({ ...b, payment: 'VNPAY' }));
+    }
+  };
+
   return (
-    <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: '#1A1A1A' }}>
+    <div className="rounded-2xl border border-white/8 overflow-hidden relative" style={{ background: '#1A1A1A' }}>
+      {toastMessage && (
+        <div className="mx-4 mt-4 px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+          <span className="text-base">⚠️</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="px-5 py-4 border-b border-white/6 text-left">
         <h2 className="text-white font-bold text-sm">Phương thức thanh toán</h2>
         <p className="text-zinc-500 text-xs mt-0.5">Chọn phương thức thanh toán phù hợp</p>
@@ -41,21 +67,14 @@ export default function PaymentSelection({ booking, setBooking }) {
         {displayedMethods.map((pm) => {
           const sel = booking.payment === pm.id;
           return (
-            <label
+            <div
               key={pm.id}
-              htmlFor={`pay-${pm.id}`}
-              className="flex items-center gap-4 p-3.5 rounded-xl cursor-pointer transition-all hover:bg-white/4 group"
-              style={{ background: sel ? 'rgba(207,15,71,0.06)' : 'transparent' }}
+              onClick={() => handleSelectMethod(pm.id, pm.name)}
+              className={`flex items-center gap-4 p-3.5 rounded-xl cursor-pointer transition-all hover:bg-white/4 group select-none ${
+                sel ? 'border border-white/10' : 'border border-transparent'
+              }`}
+              style={{ background: 'transparent' }}
             >
-              <input
-                type="radio"
-                id={`pay-${pm.id}`}
-                name="payment"
-                value={pm.id}
-                checked={sel}
-                onChange={() => setBooking((b) => ({ ...b, payment: pm.id }))}
-                className="sr-only"
-              />
               <div
                 className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
                 style={{ borderColor: sel ? '#CF0F47' : '#444' }}
@@ -81,12 +100,7 @@ export default function PaymentSelection({ booking, setBooking }) {
                 <p className="text-white text-sm font-semibold">{pm.name}</p>
                 <p className="text-zinc-500 text-xs mt-0.5">{pm.desc}</p>
               </div>
-              {sel && (
-                <svg viewBox="0 0 24 24" fill="none" stroke="#CF0F47" strokeWidth="2.5" className="w-4 h-4 shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </label>
+            </div>
           );
         })}
       </div>

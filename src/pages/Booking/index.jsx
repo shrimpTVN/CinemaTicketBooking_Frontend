@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getNowShowing } from '../../services/movieService';
 import { useBookingStore } from '../../store/bookingStore';
 import { useAuthStore } from '../../store/authStore';
-import { ALL_DATES, SHOWTIMES } from './bookingConstants';
-import { formatTimer, generateVnPayUrl, fmtVND, findOrphanSeats } from './bookingUtils';
+import { ALL_DATES, SHOWTIMES, COMBOS } from './bookingConstants';
+import { formatTimer, generateVnPayUrl, fmtVND, findOrphanSeats, groupSeatsByDisplay } from './bookingUtils';
 import { USE_MOCK } from '../../services/apiConfig';
 import apiClient from '../../services/apiClient';
 
@@ -18,6 +18,7 @@ import BookingSummary from './components/BookingSummary';
 import SuccessScreen from './components/SuccessScreen';
 import FailureScreen from './components/FailureScreen';
 import AgeRatingTag from '../../components/AgeRatingTag';
+import { preventOrphan } from '../../utils/textUtils';
 import FilmReelLoader from '../../components/FilmReelLoader';
 
 export default function Booking() {
@@ -40,6 +41,7 @@ export default function Booking() {
     clearHoldTimer,
     getAssignedSeats,
     resetStore,
+    products: storeProducts = [],
   } = useBookingStore();
 
   const location = useLocation();
@@ -96,6 +98,27 @@ export default function Booking() {
   const isRestoringVnpayRef = useRef(false);
   // Always-current ref of currentInvoice for use inside cleanup callbacks
   const currentInvoiceRef = useRef(null);
+  // Track whether user is currently navigating to payment gateway (e.g. VNPay)
+  const isNavigatingToPayment = useRef(false);
+
+  const [completedBooking, setCompletedBooking] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('completed_booking');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [showTicketConfirmModal, setShowTicketConfirmModal] = useState(false);
+  const [isConfirmTicketAgreed, setIsConfirmTicketAgreed] = useState(false);
+
+  useEffect(() => {
+    if (step === 1) {
+      setCompletedBooking(null);
+      sessionStorage.removeItem('completed_booking');
+    }
+  }, [step]);
 
   useEffect(() => {
     if (hasInitializedRef.current) return;
@@ -262,6 +285,27 @@ export default function Booking() {
               setMovie(savedBooking.movie);
               setDate(restoredDate);
               setShowtime(savedBooking.showtime);
+
+              const invId = savedBooking.invoiceId || `INV${invoiceId}`;
+              const invAmount = savedBooking.amount;
+              if (invId) {
+                setCurrentInvoice({ id: invId, amount: invAmount });
+                sessionStorage.setItem('current_booking_invoice', JSON.stringify({ id: invId, amount: invAmount }));
+              }
+
+              const restoredBooking = {
+                movie: savedBooking.movie,
+                date: restoredDate,
+                showtime: savedBooking.showtime,
+                seats: savedBooking.selectedSeats || [],
+                combos: savedBooking.combos,
+                payment: 'VNPAY',
+                invoiceId: invId,
+                total: invAmount,
+              };
+              setCompletedBooking(restoredBooking);
+              sessionStorage.setItem('completed_booking', JSON.stringify(restoredBooking));
+
               useBookingStore.setState({
                 selectedSeats: savedBooking.selectedSeats,
                 combos: savedBooking.combos,
@@ -318,13 +362,15 @@ export default function Booking() {
     return () => {
       const isRedirecting = sessionStorage.getItem('booking_redirect_auth');
       const isPaymentRedirecting = sessionStorage.getItem('payment_redirect');
+      const isPendingVnpay = !!localStorage.getItem('pending_vnpay_booking');
+
       if (isRedirecting === 'true') {
         sessionStorage.removeItem('booking_redirect_auth');
       } else if (isPaymentRedirecting === 'true') {
         sessionStorage.removeItem('payment_redirect');
       } else {
-        // If no invoice was created yet, release HELD seats back to AVAILABLE on the BE
-        if (!currentInvoiceRef.current?.id && !USE_MOCK) {
+        // If no invoice was created yet and not navigating to VNPay, release HELD seats back to AVAILABLE on the BE
+        if (!currentInvoiceRef.current?.id && !isNavigatingToPayment.current && !isPendingVnpay && !USE_MOCK) {
           const state = useBookingStore.getState();
           const user = useAuthStore.getState().user;
           if (state.selectedSeats.length > 0 && state.showtime && user) {
@@ -334,8 +380,10 @@ export default function Booking() {
             }).catch(err => console.error('[Unmount] Failed to release seats:', err));
           }
         }
-        sessionStorage.removeItem('current_booking_invoice');
-        resetStore();
+        if (!isNavigatingToPayment.current && !isPendingVnpay) {
+          sessionStorage.removeItem('current_booking_invoice');
+          resetStore();
+        }
       }
     };
   }, [resetStore]);
@@ -354,7 +402,8 @@ export default function Booking() {
   // Mobile pagehide & beforeunload handler to guarantee seat release on mobile swipe back or tab close
   useEffect(() => {
     const handlePageHide = () => {
-      if (!isNavigatingToPayment.current && !USE_MOCK) {
+      const isPendingVnpay = !!localStorage.getItem('pending_vnpay_booking');
+      if (!isNavigatingToPayment.current && !isPendingVnpay && !currentInvoiceRef.current?.id && !USE_MOCK) {
         const state = useBookingStore.getState();
         const user = useAuthStore.getState().user;
         if (state.selectedSeats.length > 0 && state.showtime && user) {
@@ -503,6 +552,24 @@ export default function Booking() {
       
       setCurrentInvoice({ id: invoiceId, amount: finalAmount });
       sessionStorage.setItem('current_booking_invoice', JSON.stringify({ id: invoiceId, amount: finalAmount }));
+
+      const invFormattedId = String(invoiceId).startsWith('INV') || String(invoiceId).startsWith('MOCK')
+        ? String(invoiceId)
+        : `INV${invoiceId}`;
+
+      const snapshotBooking = {
+        movie,
+        date,
+        showtime,
+        seats: getAssignedSeats(),
+        combos,
+        payment,
+        invoiceId: invFormattedId,
+        total: finalAmount,
+      };
+
+      setCompletedBooking(snapshotBooking);
+      sessionStorage.setItem('completed_booking', JSON.stringify(snapshotBooking));
     } else {
       console.log(">>> [processCheckout] Invoice already exists, reusing: ", invoiceId);
     }
@@ -511,8 +578,11 @@ export default function Booking() {
     
     // Now route depending on payment method
     if (payment === 'VNPAY') {
+      isNavigatingToPayment.current = true;
       const returnUrl = `${window.location.origin}/booking`;
       const bookingState = {
+        invoiceId: `INV${invoiceId}`,
+        amount: finalAmount,
         movie,
         date,
         showtime,
@@ -649,7 +719,8 @@ export default function Booking() {
 
     if (step < 4) setStep(step + 1);
     else {
-      processCheckout();
+      setIsConfirmTicketAgreed(false);
+      setShowTicketConfirmModal(true);
     }
   };
 
@@ -688,6 +759,8 @@ export default function Booking() {
     seats: getAssignedSeats(),
     combos,
     payment,
+    invoiceId: currentInvoice?.id,
+    total: currentInvoice?.amount,
   };
 
   const handleRestart = useCallback(() => {
@@ -712,11 +785,16 @@ export default function Booking() {
   }, [movie, date, showtime, combos, payment, setMovie, setDate, setShowtime, setCombos, setPayment]);
 
   if (step === 'success') {
+    const bookingToRender = completedBooking || {
+      ...bookingCompat,
+      invoiceId: currentInvoice?.id,
+      total: currentInvoice?.amount,
+    };
     return (
       <div className="min-h-screen" style={{ background: '#121212' }}>
         <div className="max-w-3xl mx-auto px-4">
           <StepIndicator step="success" />
-          <SuccessScreen booking={bookingCompat} />
+          <SuccessScreen booking={bookingToRender} />
         </div>
       </div>
     );
@@ -752,7 +830,7 @@ export default function Booking() {
               movie ? (
                 <div className="lg:hidden mb-4 rounded-2xl overflow-hidden border border-white/8 bg-[#1A1A1A] p-4 text-left shadow-lg">
                   {/* Orange top accent line */}
-                  <div className="h-[4px] bg-[#EAB308] -mx-4 -mt-4 mb-4" />
+                  <div className="h-[4px] bg-gold -mx-4 -mt-4 mb-4" />
                   <div className="flex gap-4 items-start">
                     {/* Movie Poster */}
                     <div className="w-[64px] h-[92px] rounded-lg overflow-hidden bg-zinc-800 shrink-0 shadow-md">
@@ -770,7 +848,7 @@ export default function Booking() {
                     {/* Movie and Showtime Details */}
                     <div className="flex-grow min-w-0 flex flex-col gap-1 text-left">
                       <div className="flex items-start gap-2 justify-between">
-                        <h3 className="text-white font-extrabold text-sm leading-snug line-clamp-2 flex-grow">{movie.title}</h3>
+                        <h3 className="text-white font-extrabold text-sm leading-snug line-clamp-2 flex-grow">{preventOrphan(movie.title)}</h3>
                         {movie.ageRating && (
                           <AgeRatingTag rating={movie.ageRating} className="w-8 h-5 text-[10px]" />
                         )}
@@ -889,7 +967,7 @@ export default function Booking() {
                 </div>
                 <div className="flex justify-between border-t border-white/5 pt-2.5">
                   <span className="text-zinc-500">Số tiền:</span>
-                  <span className="text-[#EAB308] font-bold text-sm">{fmtVND(currentInvoice?.amount)}</span>
+                  <span className="text-gold font-bold text-sm">{fmtVND(currentInvoice?.amount)}</span>
                 </div>
                 <div className="flex justify-between border-t border-white/5 pt-2.5">
                   <span className="text-zinc-500">Nội dung chuyển khoản:</span>
@@ -1036,7 +1114,7 @@ export default function Booking() {
               <div className="border-t border-white/5 my-5 pt-4 flex justify-between items-center text-xs">
                 <div>
                   <span className="text-zinc-500 block">Tổng thanh toán:</span>
-                  <span className="text-[#EAB308] font-bold text-sm block mt-0.5">{fmtVND(currentInvoice?.amount)}</span>
+                  <span className="text-gold font-bold text-sm block mt-0.5">{fmtVND(currentInvoice?.amount)}</span>
                 </div>
                 
                 <div className="flex gap-2">
@@ -1236,6 +1314,141 @@ export default function Booking() {
           </div>
         </div>
       )}
+
+      {/* ── THÔNG TIN ĐẶT VÉ CONFIRMATION MODAL ───────────────────────── */}
+      {showTicketConfirmModal && (() => {
+        const assignedSeats = getAssignedSeats();
+        const displayGroups = groupSeatsByDisplay(assignedSeats);
+        const seatTotal = displayGroups.reduce((s, g) => s + (g.totalPrice || 0), 0);
+        const comboTotal = Object.entries(combos).reduce((s, [id, qty]) => {
+          const c = storeProducts.find((x) => String(x.id) === String(id)) || COMBOS.find((x) => String(x.id) === String(id));
+          return s + (c ? Number(c.price) * qty : 0);
+        }, 0);
+        const subtotal = seatTotal + comboTotal;
+        const totalAmount = currentInvoice?.amount || (subtotal * 1.08);
+
+        return (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in select-none">
+            <div className="w-full max-w-[420px] bg-[#18181b] text-text-main rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative animate-scale-up">
+              {/* Modal Header */}
+              <div className="p-4 border-b border-white/8 flex items-center justify-center bg-[#18181b] relative">
+                <h3 className="font-bold text-sm uppercase tracking-wider text-text-main text-center">
+                  Thông Tin Đặt Vé
+                </h3>
+                <button
+                  onClick={() => setShowTicketConfirmModal(false)}
+                  className="absolute right-4 text-text-sub3 hover:text-text-main w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer text-base font-bold bg-white/5 hover:bg-white/10"
+                  aria-label="Đóng"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-5 flex flex-col gap-3.5 text-left">
+                {/* Box 1: Phim */}
+                <div className="grid grid-cols-[64px_1fr] items-start gap-2.5">
+                  <span className="text-[11px] text-text-sub3 font-bold uppercase tracking-wider pt-2.5 text-left">Phim</span>
+                  <div className="border border-white/8 rounded-lg p-3 bg-zinc-900/60">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-text-main leading-tight">
+                        {preventOrphan(movie?.title)}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-text-sub2 mt-1">
+                      <span>{showtime?.format || '2D'} {showtime?.lang || 'Phụ Đề'}</span>
+                      {movie?.ageRating && (
+                        <AgeRatingTag rating={movie.ageRating} className="w-7 h-4.5 text-[9px]" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Box 2: Rạp */}
+                <div className="grid grid-cols-[64px_1fr] items-start gap-2.5">
+                  <span className="text-[11px] text-text-sub3 font-bold uppercase tracking-wider pt-2.5 text-left">Rạp</span>
+                  <div className="border border-white/8 rounded-lg p-3 bg-zinc-900/60">
+                    <h4 className="font-bold text-sm text-text-main leading-tight">
+                      Galaxy Cinema
+                    </h4>
+                    <p className="text-xs text-text-sub2 font-medium mt-1">
+                      {showtime?.start || '10:30'} - {getFullDayLabel(date?.dateObj)}, {date?.dateLabel}/{date?.dateObj?.getFullYear()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Box 3: Ghế & Room */}
+                <div className="grid grid-cols-[64px_1fr] items-start gap-2.5">
+                  <span className="text-[11px] text-text-sub3 font-bold uppercase tracking-wider pt-2.5 text-left">Ghế</span>
+                  <div className="border border-white/8 rounded-lg p-3 bg-zinc-900/60 flex flex-col gap-1.5">
+                    <span className="font-bold text-xs text-text-main block mb-0.5">{showtime?.room || 'HALL 1'}</span>
+                    {/* Seats List - Count & Codes right next to each other */}
+                    {displayGroups.map((g) => (
+                      <div key={g.id} className="text-xs flex items-center justify-start gap-2 flex-wrap">
+                        <span className="font-medium text-text-sub3">{g.count}x {g.typeLabel}:</span>
+                        <span className="font-bold text-text-main text-xs">{g.seatCodes}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Box 4: Combo (Nếu có chọn combo) */}
+                {Object.entries(combos).some(([, qty]) => qty > 0) && (
+                  <div className="grid grid-cols-[64px_1fr] items-start gap-2.5">
+                    <span className="text-[11px] text-text-sub3 font-bold uppercase tracking-wider pt-2.5 text-left">Combo</span>
+                    <div className="border border-white/8 rounded-lg p-3 bg-zinc-900/60 flex flex-col gap-1.5">
+                      {Object.entries(combos).filter(([, qty]) => qty > 0).map(([id, qty]) => {
+                        const c = storeProducts.find((x) => String(x.id) === String(id)) || COMBOS.find((x) => String(x.id) === String(id));
+                        if (!c) return null;
+                        return (
+                          <div key={id} className="text-xs flex items-center justify-between gap-2">
+                            <span className="font-bold text-text-main">{qty}x {c.name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Box 5: Tổng */}
+                <div className="grid grid-cols-[64px_1fr] items-center gap-2.5">
+                  <span className="text-[11px] text-text-sub3 font-bold uppercase tracking-wider text-left">Tổng</span>
+                  <div className="bg-[#005bab] text-text-main rounded-lg py-2.5 px-3.5 flex items-center justify-start font-bold shadow-sm shadow-blue-950/40">
+                    <span className="text-sm tracking-tight text-text-main font-bold">{fmtVND(totalAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Agreement Checkbox */}
+                <div className="flex items-start gap-3 pt-0.5">
+                  <input
+                    type="checkbox"
+                    id="confirm-ticket-agree"
+                    checked={isConfirmTicketAgreed}
+                    onChange={(e) => setIsConfirmTicketAgreed(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-white/20 bg-zinc-800 text-cta focus:ring-cta cursor-pointer"
+                  />
+                  <label htmlFor="confirm-ticket-agree" className="text-[11px] text-text-sub3 leading-tight cursor-pointer select-none">
+                    Tôi xác nhận các thông tin đặt vé đã chính xác.<br />
+                    Tôi đồng ý với các <span className="text-cta font-bold hover:underline">Điều khoản dịch vụ</span> và <span className="text-cta font-bold hover:underline">Chính sách bảo mật</span>.
+                  </label>
+                </div>
+
+                {/* Action Submit Button */}
+                <button
+                  onClick={() => {
+                    setShowTicketConfirmModal(false);
+                    processCheckout();
+                  }}
+                  disabled={!isConfirmTicketAgreed}
+                  className="w-full py-3.5 rounded-2xl font-bold text-sm text-text-main transition-all shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-cta hover:bg-cta-light active:scale-[0.98] mt-1"
+                >
+                  Thanh Toán
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <style>{`
         .animate-fade-in {

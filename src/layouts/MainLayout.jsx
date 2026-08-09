@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import TrailerModal from '../components/TrailerModal';
+import AIChatbotWidget from '../components/AIChatbotWidget';
 import { useAuthStore } from '../store/authStore';
 import { getAllMovies } from '../services/movieService';
-import { Search, Bell, CircleUser, ChevronDown, Menu, X, History, LogOut, LayoutDashboard } from 'lucide-react';
+import { Search, Bell, CircleUser, ChevronDown, Menu, X, History, LogOut, LayoutDashboard, MapPin, Phone, Mail, Clock } from 'lucide-react';
 
 export default function MainLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -124,8 +125,8 @@ export default function MainLayout() {
             <NavLink to="/hall" className={getNavLinkClass}>
               Phòng chiếu
             </NavLink>
-            <NavLink to="/news" className={getNavLinkClass}>
-              Tin tức
+            <NavLink to="/events" className={getNavLinkClass}>
+              Sự kiện
             </NavLink>
           </nav>
 
@@ -194,7 +195,7 @@ export default function MainLayout() {
                           className="flex items-center gap-2 px-4 py-2.5 text-body3 text-cta hover:text-cta-light hover:bg-zinc-800 transition-colors border-t border-zinc-800 font-bold"
                         >
                           <LayoutDashboard className="w-4 h-4 text-cta" />
-                          Trang quản trị (Admin)
+                          Dashboard
                         </Link>
                       )}
                       <button
@@ -258,9 +259,9 @@ export default function MainLayout() {
 
                 {/* Search Suggestions Dropdown */}
                 {searchQuery.trim() !== '' && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-zinc-200 rounded-lg shadow-2xl max-h-72 overflow-y-auto z-[1000] custom-scrollbar animate-slide-down">
+                  <div className="absolute right-0 mt-2 w-80 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl max-h-72 overflow-y-auto z-[1000] custom-scrollbar animate-slide-down">
                     {filteredMovies.length === 0 ? (
-                      <div className="p-4 text-center text-body3 text-zinc-500">
+                      <div className="p-4 text-center text-body3 text-text-sub3">
                         Không tìm thấy phim nào
                       </div>
                     ) : (
@@ -273,18 +274,18 @@ export default function MainLayout() {
                               setSearchOpen(false);
                               setSearchQuery('');
                             }}
-                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-100 transition-colors text-left"
+                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/8 transition-colors text-left"
                           >
-                            <div className="w-10 h-14 rounded bg-zinc-250 overflow-hidden flex-shrink-0">
-                              {movie.poster ? (
-                                <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover" />
+                            <div className="w-10 h-14 rounded bg-zinc-800 overflow-hidden flex-shrink-0 border border-white/10">
+                              {(movie.posterUrl || movie.poster || movie.avatar) ? (
+                                <img src={movie.posterUrl || movie.poster || movie.avatar} alt={movie.title} className="w-full h-full object-cover" />
                               ) : (
-                                <div className="w-full h-full bg-zinc-350 flex items-center justify-center text-zinc-500 text-xs">🎬</div>
+                                <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xs">🎬</div>
                               )}
                             </div>
-                            <div className="min-w-0">
-                              <div className="text-body3 font-bold text-zinc-900 truncate">{movie.title}</div>
-                              <div className="text-[11px] text-zinc-500 truncate">{movie.genre?.join(', ') || 'Hành động'}</div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-body3 font-bold text-text-main truncate">{movie.title}</div>
+                              <div className="text-[11px] text-text-sub3 truncate mt-0.5">{movie.genre?.join(', ') || 'Hành động'}</div>
                             </div>
                           </Link>
                         ))}
@@ -343,8 +344,8 @@ export default function MainLayout() {
                             className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-800 transition-colors text-left"
                           >
                             <div className="w-8 h-11 rounded bg-zinc-250 overflow-hidden flex-shrink-0">
-                              {movie.poster ? (
-                                <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover" />
+                              {(movie.posterUrl || movie.poster || movie.avatar) ? (
+                                <img src={movie.posterUrl || movie.poster || movie.avatar} alt={movie.title} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full bg-zinc-350 flex items-center justify-center text-zinc-500 text-[10px]">🎬</div>
                               )}
@@ -370,8 +371,8 @@ export default function MainLayout() {
               <NavLink to="/hall" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
                 Phòng chiếu
               </NavLink>
-              <NavLink to="/news" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
-                Tin tức
+              <NavLink to="/events" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                Sự kiện
               </NavLink>
             </div>
           </nav>
@@ -382,44 +383,131 @@ export default function MainLayout() {
         <Outlet />
       </main>
 
-      <footer className="bg-bg-dark border-t border-[#222222] py-12 mt-12">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div>
-            <div className="text-heading2 text-cta tracking-wider font-bold mb-4">LOGO</div>
-            <p className="text-body3 text-text-sub3">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc scelerisque arcu et dui.
-            </p>
+      {/* ── Minimalist Clean Footer ───────────────────────────── */}
+      <footer className="bg-[#09090b] border-t border-zinc-800/60 pt-12 pb-8 mt-20 text-zinc-400">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 pb-10 border-b border-zinc-800/40">
+            {/* Column 1: Brand & Contact */}
+            <div className="space-y-3 text-left">
+              {/* LOGO placeholder kept intact for user update */}
+              <Link to="/" className="inline-block text-2xl font-bold text-white tracking-wider uppercase">
+                LOGO
+              </Link>
+              <p className="text-xs text-zinc-400 leading-relaxed font-light">
+                Hệ thống rạp chiếu phim hiện đại. Đặt vé xem phim trực tuyến nhanh chóng, tiện lợi.
+              </p>
+              <div className="text-xs space-y-1 text-zinc-400 pt-1">
+                <p>Hotline: <span className="text-zinc-200 font-medium">1900 6868</span></p>
+                <p>Email: <span className="text-zinc-200 font-medium">cskh@cinematicket.vn</span></p>
+              </div>
+            </div>
+
+            {/* Column 2: Navigation */}
+            <div className="text-left space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-200">
+                Khám phá
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li>
+                  <Link to="/movies" className="hover:text-white transition-colors">
+                    Phim đang chiếu & Sắp chiếu
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/hall" className="hover:text-white transition-colors">
+                    Hệ thống phòng chiếu
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/events" className="hover:text-white transition-colors">
+                    Sự kiện & Ưu đãi
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/booking" className="hover:text-white transition-colors">
+                    Đặt vé xem phim nhanh
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3: Policy & Support */}
+            <div className="text-left space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-200">
+                Quy định & Hỗ trợ
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Điều khoản sử dụng
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Chính sách bảo mật thông tin
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Quy định vé & Khai báo độ tuổi
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Câu hỏi thường gặp (FAQ)
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 4: Social */}
+            <div className="text-left space-y-4">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-200 mb-3">
+                  Theo dõi chúng tôi
+                </h4>
+                <div className="flex items-center gap-2.5">
+                  <a
+                    href="#"
+                    aria-label="Facebook"
+                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-700 transition-all cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                  </a>
+                  <a
+                    href="#"
+                    aria-label="Youtube"
+                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-700 transition-all cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                    </svg>
+                  </a>
+                  <a
+                    href="#"
+                    aria-label="Instagram"
+                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-700 transition-all cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 className="text-label-custom font-bold text-text-sub1 mb-4 uppercase">Information</h3>
-            <ul className="space-y-2 text-body3 text-text-sub2">
-              <li><Link to="/" className="hover:text-cta">About Us</Link></li>
-              <li><Link to="/" className="hover:text-cta">Careers</Link></li>
-              <li><Link to="/" className="hover:text-cta">Press</Link></li>
-            </ul>
+
+          {/* Bottom Copyright */}
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
+            <p>© {new Date().getFullYear()} Logo Cinema. Tất cả quyền được bảo lưu.</p>
+            <p className="text-zinc-500">Hệ thống đặt vé rạp chiếu phim trực tuyến</p>
           </div>
-          <div>
-            <h3 className="text-label-custom font-bold text-text-sub1 mb-4 uppercase">Help</h3>
-            <ul className="space-y-2 text-body3 text-text-sub2">
-              <li><Link to="/" className="hover:text-cta">FAQs</Link></li>
-              <li><Link to="/" className="hover:text-cta">Terms of Service</Link></li>
-              <li><Link to="/" className="hover:text-cta">Privacy Policy</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-label-custom font-bold text-text-sub1 mb-4 uppercase">Socials</h3>
-            <ul className="space-y-2 text-body3 text-text-sub2">
-              <li><a href="#" className="hover:text-cta">Facebook</a></li>
-              <li><a href="#" className="hover:text-cta">Twitter</a></li>
-              <li><a href="#" className="hover:text-cta">Instagram</a></li>
-            </ul>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 mt-8 pt-8 border-t border-[#222222] text-center text-body3 text-text-sub3">
-          &copy; {new Date().getFullYear()} Logo Cinema. All rights reserved.
         </div>
       </footer>
       <TrailerModal />
+      <AIChatbotWidget />
     </div>
   );
 }

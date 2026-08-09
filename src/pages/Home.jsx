@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNowShowing, getComingSoon, updateSpecialList } from '../services/movieService';
+import { getAllEvents } from '../services/eventService';
 import HeroSlider from '../components/HeroSlider';
 import MovieCard from '../components/MovieCard';
 import TabFilter from '../components/TabFilter';
 import SectionHeading from '../components/SectionHeading';
 import AgeRatingTag from '../components/AgeRatingTag';
+import EventSwiper from '../components/EventSwiper';
+import ScrollReveal from '../components/ScrollReveal';
+import { useTrailerStore } from '../store/trailerStore';
 
 // Skeleton Loader for Hero Banner
 const HeroSkeleton = () => (
@@ -34,10 +38,19 @@ const CardSkeleton = () => (
   </div>
 );
 
+// Helper to extract YouTube video ID safely
+const getVideoId = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+  return (match && match[2] && match[2].length === 11) ? match[2] : null;
+};
+
 export default function Home() {
   const navigate = useNavigate();
+  const { openTrailer } = useTrailerStore();
   const [nowShowing, setNowShowing] = useState([]);
   const [comingSoon, setComingSoon] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('now-showing');
@@ -48,14 +61,16 @@ export default function Home() {
     setError(null);
     try {
       await updateSpecialList();
-      const [showingData, soonData] = await Promise.all([
+      const [showingData, soonData, eventsData] = await Promise.all([
         getNowShowing(),
-        getComingSoon()
+        getComingSoon(),
+        getAllEvents()
       ]);
       setNowShowing(showingData);
       setComingSoon(soonData);
+      setEvents(Array.isArray(eventsData) ? eventsData : []);
     } catch (err) {
-      setError('Đã xảy ra lỗi khi tải dữ liệu phim. Vui lòng kiểm tra lại kết nối.');
+      setError('Đã xảy ra lỗi khi tải dữ liệu. Vui lòng kiểm tra lại kết nối.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -80,6 +95,20 @@ export default function Home() {
     if (recommendedPool.length > 0) {
       setRecommendedIndex((prev) => (prev + 1) % recommendedPool.length);
     }
+  };
+
+  // Hàm lấy lý do đề xuất phim cá nhân hóa
+  const getRecommendationReason = (movie) => {
+    if (!movie) return '';
+    const mainGenre = movie.genre && movie.genre.length > 0 ? movie.genre[0] : '';
+    const ratingNum = Number(movie.rating) || 0;
+    if (ratingNum >= 8.0) {
+      return `Dựa trên điểm số cao (${ratingNum}/10) & đánh giá tích cực từ khán giả`;
+    }
+    if (mainGenre) {
+      return `Dựa trên xu hướng xem phim thể loại ${mainGenre} được săn đón`;
+    }
+    return `Dựa trên danh sách phim hot được lựa chọn nhiều nhất`;
   };
 
   // Hàm chọn một phim cụ thể từ danh sách dưới làm active
@@ -127,30 +156,43 @@ export default function Home() {
     );
   }
 
+  const recVideoId = activeRecommended ? getVideoId(activeRecommended.trailerUrl) : null;
+  const recCoverImage = recVideoId 
+    ? `https://img.youtube.com/vi/${recVideoId}/maxresdefault.jpg` 
+    : (activeRecommended?.bannerUrl || activeRecommended?.posterUrl);
+  const recCoverFallback = recVideoId 
+    ? `https://img.youtube.com/vi/${recVideoId}/hqdefault.jpg` 
+    : (activeRecommended?.bannerUrl || activeRecommended?.posterUrl);
+
   return (
     <div className="bg-bg-dark text-text-main min-h-screen pb-12">
       {/* 1. Hero Slider Section */}
       <HeroSlider movies={nowShowing} />
 
-      {/* 2. Movies Grid Section */}
-      <section className="max-w-7xl mx-auto px-4 mt-12 text-left">
-        {/* Section Title */}
-        <div className="flex items-center space-x-2 mb-6 border-b border-[#222222] pb-4">
-          <SectionHeading uppercase={false}>Phim</SectionHeading>
+      {/* Full-width Divider between Trending and Movies */}
+      <div className="w-full border-t border-[#222222] my-12" />
 
-          {/* Tabs Toggles */}
-          <TabFilter
-            tabs={[
-              { id: 'now-showing', label: 'Đang chiếu' },
-              { id: 'coming-soon', label: 'Sắp chiếu' }
-            ]}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            variant="select"
-            isHeaderTab={true}
-            className="ml-8 text-body2"
-          />
-        </div>
+      {/* 2. Movies Grid Section */}
+      <section className="max-w-7xl mx-auto px-4 text-left">
+        {/* Section Title */}
+        <ScrollReveal direction="up">
+          <div className="flex items-center space-x-2 mb-6 border-b border-[#222222] pb-4">
+            <SectionHeading>Phim</SectionHeading>
+
+            {/* Tabs Toggles */}
+            <TabFilter
+              tabs={[
+                { id: 'now-showing', label: 'Đang chiếu' },
+                { id: 'coming-soon', label: 'Sắp chiếu' }
+              ]}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              variant="select"
+              isHeaderTab={true}
+              className="ml-8 text-body2"
+            />
+          </div>
+        </ScrollReveal>
 
         {/* Empty State */}
         {activeMovies.length === 0 ? (
@@ -161,195 +203,203 @@ export default function Home() {
           <div>
             {/* Movies Grid: Mobile 2 columns, Desktop 4 columns */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-              {activeMovies.map((movie) => (
-                <MovieCard key={movie.id} movie={movie} />
+              {activeMovies.map((movie, idx) => (
+                <ScrollReveal key={movie.id} delay={idx * 60} direction="up">
+                  <MovieCard movie={movie} />
+                </ScrollReveal>
               ))}
             </div>
 
             {/* View All Button */}
-            <div className="mt-12 flex justify-center">
-              <button
-                onClick={() => navigate('/movies')}
-                className="border border-[#333333] hover:border-cta text-text-sub1 hover:text-cta text-body3 px-8 py-3 rounded font-bold transition-all uppercase cursor-pointer"
-              >
-                Xem tất cả
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 3. Recommended Section */}
-      <section className="max-w-7xl mx-auto px-4 mt-16 text-left">
-        <SectionHeading uppercase={false} className="mb-6">Đề xuất cho bạn</SectionHeading>
-
-        {activeRecommended && (
-          <div className="flex flex-col">
-            {/* Featured Banner Card */}
-            <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-8 group">
-              {/* Vertical Poster on the Left */}
-              <div className="relative w-full sm:w-[220px] md:w-[240px] aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center border border-zinc-800">
-                <img
-                  src={activeRecommended.posterUrl}
-                  alt={activeRecommended.title}
-                  className="w-full h-full object-cover opacity-75 group-hover:scale-102 transition-transform duration-500"
-                />
-                {/* Play icon overlay */}
+            <ScrollReveal delay={150} direction="up">
+              <div className="mt-12 flex justify-center">
                 <button
-                  onClick={() => window.open(activeRecommended.trailerUrl, '_blank')}
-                  className="absolute w-16 h-16 rounded-full bg-cta text-text-main flex items-center justify-center shadow-lg hover:scale-105 transition-transform duration-300 cursor-pointer"
-                  aria-label="Xem trailer"
+                  onClick={() => navigate('/movies')}
+                  className="border border-zinc-700 hover:border-cta text-text-main hover:text-cta text-body3 font-google-sans px-8 py-3 rounded font-bold transition-colors uppercase cursor-pointer"
                 >
-                  <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
+                  Xem tất cả
                 </button>
               </div>
-
-              {/* Right Side: Details & Actions */}
-              <div className="flex-grow flex flex-col justify-between py-2 text-left pr-0 md:pr-14">
-                <div>
-                  <h3 className="text-[28px] md:text-[36px] font-bold text-text-main leading-tight mb-4 group-hover:text-cta-light transition-colors">
-                    {activeRecommended.title}
-                  </h3>
-
-                  {/* Metadata Row matching wireframe details */}
-                  <div className="flex flex-wrap items-center gap-4 md:gap-6 mb-4 text-body3">
-                    <span className="text-text-sub2 font-medium">{activeRecommended.genre?.join(', ')}</span>
-                    <span className="text-gold font-bold">★ {activeRecommended.rating}/10</span>
-                    <span className="border border-zinc-700 px-3 py-0.5 rounded text-text-sub2 text-[12px] font-bold">
-                      {activeRecommended.duration} phút
-                    </span>
-                    <AgeRatingTag rating={activeRecommended.ageRating} />
-                  </div>
-
-                  <p className="text-body2 text-text-sub3 leading-relaxed mb-6 line-clamp-4 max-w-2xl">
-                    {activeRecommended.description}
-                  </p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex space-x-4">
-                  <button
-                    onClick={() => navigate('/booking', { state: { movieId: activeRecommended.id } })}
-                    className="bg-cta hover:bg-cta-light text-text-main text-body3 px-6 py-2.5 rounded font-bold uppercase transition-colors cursor-pointer"
-                  >
-                    Mua vé
-                  </button>
-                  <button
-                    onClick={() => navigate(`/movies/${activeRecommended.id}`)}
-                    className="border border-zinc-700 text-text-sub2 hover:text-text-main hover:bg-white/5 text-body3 px-6 py-2.5 rounded font-bold uppercase transition-all cursor-pointer"
-                  >
-                    Chi tiết
-                  </button>
-                </div>
-              </div>
-
-              {/* Slider Next Chevron Indicator (Right Side) */}
-              <button
-                onClick={handleNextRecommendation}
-                className="hidden md:flex absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-zinc-700 items-center justify-center hover:border-cta hover:text-cta transition-colors cursor-pointer text-text-sub1 bg-zinc-900/80 backdrop-blur-xs"
-                aria-label="Đề xuất tiếp theo"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Bottom mini-previews of other recommended movies */}
-            <div className="flex gap-4 mt-6">
-              {otherRecommendations.map((movie) => (
-                <div
-                  key={movie.id}
-                  onClick={() => handleSelectRecommendation(movie)}
-                  className="group cursor-pointer flex flex-col"
-                >
-                  <div className="w-24 aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 border border-zinc-800 hover:border-white transition-all duration-300 hover:scale-103">
-                    <img
-                      src={movie.posterUrl}
-                      alt={movie.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            </ScrollReveal>
           </div>
         )}
       </section>
 
-      {/* 4. News / Sets Section */}
-      <section className="max-w-7xl mx-auto px-4 mt-16 text-left">
-        <SectionHeading uppercase={false} className="mb-6">Tin tức</SectionHeading>
+      {/* Full-width Divider between Movies and Recommended */}
+      <div className="w-full border-t border-[#222222] my-12" />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Large Article (left column span 2) */}
-          <div
-            onClick={() => window.open('https://github.com/vitejs/vite', '_blank')}
-            className="lg:col-span-2 flex flex-col md:flex-row bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden group cursor-pointer"
-          >
-            <div className="md:w-1/2 overflow-hidden bg-zinc-800 border-b md:border-b-0 md:border-r border-zinc-800 flex">
+      {/* 3. Recommended Section */}
+      <section className="max-w-7xl mx-auto px-4 text-left">
+        <ScrollReveal direction="up">
+          <SectionHeading className="mb-6">Đề xuất cho bạn</SectionHeading>
+        </ScrollReveal>
+
+        {activeRecommended && (
+          <ScrollReveal direction="scale">
+            <div className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 md:p-8 flex flex-col justify-between overflow-hidden shadow-2xl backdrop-blur-xl">
+              {/* Movie Banner Cover Background (styled identically to Movie Detail page hero) */}
               <img
-                src="https://picsum.photos/seed/cinema-lobby/800/450"
-                alt="Main News"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
-                loading="lazy"
+                src={recCoverImage}
+                alt={activeRecommended.title}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = recCoverFallback;
+                }}
+                className="absolute inset-0 w-full h-full object-cover opacity-35 scale-105 pointer-events-none transition-all duration-700 select-none"
               />
-            </div>
-            <div className="p-6 md:w-1/2 flex flex-col justify-center">
-              <h3 className="text-subtitle font-bold text-text-main mb-3 group-hover:text-cta transition-colors">
-                Lịch chiếu phim đặc biệt hè 2026: Ưu đãi bùng nổ tại các cụm rạp
-              </h3>
-              <p className="text-body2 text-text-sub3 leading-relaxed">
-                Đón chào mùa hè rực rỡ với loạt chương trình khuyến mãi mua 1 tặng 1 vé và combo bắp nước siêu tiết kiệm tại tất cả cụm rạp trên cả nước từ ngày 1/7 đến hết ngày 31/8.
-              </p>
-            </div>
-          </div>
+              <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/85 to-zinc-950/40 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-zinc-950/30 pointer-events-none" />
 
-          {/* Right vertical sidebar articles list */}
-          <div className="flex flex-col gap-4">
-            {[
-              {
-                id: 1,
-                title: "Top 5 bộ phim chiếu rạp không thể bỏ lỡ trong tháng này",
-                desc: "Điểm mặt những tác phẩm bom tấn đa thể loại sắp càn quét các phòng vé Việt Nam.",
-                img: "https://picsum.photos/seed/movie-popcorn/180/120"
-              },
-              {
-                id: 2,
-                title: "Hậu trường chưa kể của bom tấn phòng vé 'Mai'",
-                desc: "Những chi tiết thú vị về quá trình quay dựng và những cảnh quay đầy cảm xúc của các diễn viên.",
-                img: "https://picsum.photos/seed/movie-camera/180/120"
-              },
-              {
-                id: 3,
-                title: "Công Tử Bạc Liêu tung teaser đầu tiên hé lộ tạo hình ấn tượng",
-                desc: "Hình ảnh tạo hình sang trọng và phong thái chơi ngông của vị công tử giàu có bậc nhất Nam Kỳ.",
-                img: "https://picsum.photos/seed/cinema-projector/180/120"
-              }
-            ].map((item) => (
-              <div
-                key={item.id}
-                onClick={() => window.open('https://github.com/vitejs/vite', '_blank')}
-                className="flex gap-4 p-3 rounded-lg border border-transparent hover:border-zinc-800 hover:bg-zinc-900/30 transition-all cursor-pointer group"
-              >
-                <div className="aspect-[4/3] w-24 rounded overflow-hidden flex-shrink-0 bg-zinc-800 border border-zinc-800">
-                  <img src={item.img} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+              {/* Main Content Row */}
+              <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
+                {/* Left 3D Stacked Playing Cards Deck Container */}
+                <div className="relative w-full sm:w-[340px] md:w-[370px] h-[340px] sm:h-[360px] flex-shrink-0 flex items-center justify-start pl-2 sm:pl-4 py-2">
+                  {recommendedPool.map((movie, idx) => {
+                    const offset = (idx - recommendedIndex + recommendedPool.length) % recommendedPool.length;
+                    const isTop = offset === 0;
+
+                    // 3D Deck Card Offset Calculations (Wider shift for easy clicking)
+                    const translateX = offset * 36; // Shift rightward 36px per card
+                    const translateY = offset * 6;  // Downward offset
+                    const scale = 1 - offset * 0.05; // Gentle scaling
+                    const rotate = offset * 4;       // Fan-out angle
+
+                    return (
+                      <div
+                        key={movie.id}
+                        onClick={() => setRecommendedIndex(idx)}
+                        style={{
+                          zIndex: recommendedPool.length - offset,
+                          transform: `translate3d(${translateX}px, ${translateY}px, 0px) scale(${scale}) rotate(${rotate}deg)`,
+                          transformOrigin: 'bottom left'
+                        }}
+                        className={`absolute top-2 left-2 w-[185px] sm:w-[200px] md:w-[210px] aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl transition-all duration-500 ease-out cursor-pointer group/card ${
+                          isTop
+                            ? 'border-2 border-cta ring-4 ring-cta/25 shadow-cta/30 opacity-100'
+                            : 'border border-zinc-700/70 opacity-80 hover:opacity-100 hover:scale-105 hover:-translate-y-2'
+                        }`}
+                      >
+                        <img
+                          src={movie.posterUrl}
+                          alt={movie.title}
+                          className="w-full h-full object-cover select-none transition-transform duration-500 group-hover/card:scale-105"
+                        />
+
+                        {/* Dark overlay for cards stacked underneath */}
+                        {!isTop && (
+                          <div className="absolute inset-0 bg-black/40 group-hover/card:bg-black/10 transition-colors" />
+                        )}
+
+                        {/* Age Rating Tag Overlay (Top-Left of Active Top Poster) */}
+                        {isTop && movie.ageRating && (
+                          <div className="absolute top-3 left-3 z-20 shadow-md">
+                            <AgeRatingTag rating={movie.ageRating} />
+                          </div>
+                        )}
+
+                        {/* Play Icon Hover Overlay for Top Poster */}
+                        {isTop && (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 flex items-center justify-center transition-opacity duration-300 z-20">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTrailer(movie.trailerUrl);
+                              }}
+                              className="w-14 h-14 rounded-full bg-cta text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-300 cursor-pointer"
+                              title="Xem trailer"
+                            >
+                              <svg className="w-7 h-7 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Mini Title Label for Peeking Cards Stacked Underneath */}
+                        {!isTop && (
+                          <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-md px-2.5 py-1.5 rounded-lg text-[10px] text-white font-bold truncate border border-white/10 shadow-md">
+                            {movie.title}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-body3 font-bold text-text-main line-clamp-2 mb-1 group-hover:text-cta transition-colors">
-                    {item.title}
-                  </h4>
-                  <p className="text-[11px] text-text-sub3 line-clamp-2 leading-relaxed">
-                    {item.desc}
-                  </p>
+
+                {/* Right Side Info & Actions */}
+                <div className="flex-grow flex flex-col justify-between text-left w-full py-1">
+                  <div>
+                    {/* Gemini AI Recommendation Badge Container */}
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-blue-950/70 border border-indigo-500/40 shadow-lg shadow-indigo-500/15 mb-4 max-w-full">
+                      {/* AI Sparkle Icon (Gemini style) */}
+                      <svg className="w-4 h-4 text-indigo-300 flex-shrink-0 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C12 6.627 6.627 12 0 12C6.627 12 12 17.373 12 24C12 17.373 17.373 12 24 12C17.373 12 12 6.627 12 0Z" />
+                      </svg>
+                      <span className="text-xs sm:text-body3 font-semibold bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 bg-clip-text text-transparent truncate">
+                        {getRecommendationReason(activeRecommended)}
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-text-main leading-snug mb-3">
+                      {activeRecommended.title}
+                    </h3>
+
+                    {/* Metadata Row: Genre • Duration • Rating */}
+                    <div className="flex flex-wrap items-center gap-2 mb-4 text-body3 text-text-sub2">
+                      <span>{activeRecommended.genre?.join(', ')}</span>
+                      <span className="text-zinc-600">•</span>
+                      <span>{activeRecommended.duration} phút</span>
+                      {Number(activeRecommended.rating) > 0 && (
+                        <>
+                          <span className="text-zinc-600">•</span>
+                          <span className="text-gold font-bold flex items-center gap-1">
+                            ★ {activeRecommended.rating}
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-body2 text-text-sub3 leading-relaxed mb-6 line-clamp-3 max-w-2xl font-light">
+                      {activeRecommended.description}
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <button
+                      onClick={() => navigate('/booking', { state: { movieId: activeRecommended.id } })}
+                      className="bg-cta hover:bg-cta-light text-text-main text-body3 font-google-sans px-7 py-3 rounded-lg font-bold uppercase transition-colors cursor-pointer shadow-lg shadow-cta/20"
+                    >
+                      Mua vé
+                    </button>
+                    <button
+                      onClick={() => navigate(`/movies/${activeRecommended.id}`)}
+                      className="border border-zinc-700 hover:border-zinc-500 text-text-sub2 hover:text-text-main text-body3 font-google-sans px-7 py-3 rounded-lg font-bold uppercase transition-all cursor-pointer"
+                    >
+                      Chi tiết
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </ScrollReveal>
+        )}
+      </section>
+
+      {/* Full-width Divider between Recommended and Events */}
+      <div className="w-full border-t border-[#222222] my-12" />
+
+      {/* 4. Events Section */}
+      <section className="max-w-7xl mx-auto px-4 text-left">
+        <ScrollReveal direction="up">
+          <SectionHeading className="mb-6">Sự kiện</SectionHeading>
+        </ScrollReveal>
+
+        <ScrollReveal direction="up" delay={100}>
+          <EventSwiper events={events} />
+        </ScrollReveal>
       </section>
     </div>
   );

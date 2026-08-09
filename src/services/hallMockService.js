@@ -58,6 +58,10 @@ export const getAllHallTypes = async () => {
   return [...mockHallTypes];
 };
 
+export const getHallTypeById = async (id) => {
+  return mockHallTypes.find(t => t.id === Number(id) || String(t.id) === String(id) || t.name.toLowerCase().includes(String(id).toLowerCase())) || null;
+};
+
 export const getAllSeatTypes = async () => {
   return [...mockSeatTypes];
 };

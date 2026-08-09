@@ -2,6 +2,7 @@ import { useBookingStore } from '../../../store/bookingStore';
 import { COMBOS } from '../bookingConstants';
 import { fmtVND, formatTimer, groupSeatsByDisplay } from '../bookingUtils';
 import AgeRatingTag from '../../../components/AgeRatingTag';
+import { preventOrphan } from '../../../utils/textUtils';
 
 export default function BookingSummary({ booking, step, onBack, onNext, canNext }) {
   const { movie, showtime, date, seats, combos } = booking;
@@ -24,7 +25,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
   const total = subtotal + vat;
 
   const nextLabel =
-    step === 4 ? 'Xác nhận thanh toán' :
+    step === 4 ? 'Thanh toán' :
       step === 3 ? 'Đến thanh toán' :
         step === 2 ? 'Chọn combo' : 'Chọn ghế';
 
@@ -48,7 +49,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
         {/* Outer Card Container */}
         <div className="rounded-2xl border border-white/8 overflow-hidden flex flex-col" style={{ background: '#1A1A1A' }}>
           {/* Top brand accent strip */}
-          <div className="h-[4px] w-full" style={{ backgroundColor: '#EAB308' }} />
+          <div className="h-[4px] w-full bg-gold" />
 
           {/* Card Content */}
           <div className="p-5 flex flex-col text-left">
@@ -69,7 +70,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
                     )}
                   </div>
                   <div className="flex-grow min-w-0 text-left">
-                    <h3 className="text-white font-bold text-base leading-tight mb-2 line-clamp-2">{movie.title}</h3>
+                    <h3 className="text-white font-bold text-base leading-tight mb-2 line-clamp-2">{preventOrphan(movie.title)}</h3>
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400 text-left mt-1 leading-none">
                       {showtime ? (
                         <span>{showtime.format} {showtime.lang}</span>
@@ -129,7 +130,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
 
                     {/* Combos — no dividers between them */}
                     {Object.values(combos).some((v) => v > 0) && (
-                      <div className="py-2.5 flex flex-col gap-2">
+                      <div className="pt-2.5 pb-0.5 flex flex-col gap-2">
                         {Object.entries(combos).filter(([, qty]) => qty > 0).map(([id, qty]) => {
                           const c = resolvedProducts.find((x) => x.id === id);
                           if (!c) return null;
@@ -159,21 +160,21 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
               </div>
             )}
 
-            <div className="border-t border-dashed border-zinc-700 my-4" />
+            <div className="border-t border-dashed border-zinc-700 mt-2.5 mb-3.5" />
 
             {/* Row 4: Total Price Block */}
-            <div className="flex flex-col gap-1.5 w-full text-sm">
-              <div className="flex justify-between text-zinc-400">
-                <span>Tạm tính</span>
-                <span>{fmtVND(subtotal)}</span>
+            <div className="flex flex-col gap-2 w-full text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-400 font-medium">Tạm tính</span>
+                <span className="text-zinc-200 font-semibold">{fmtVND(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>Thuế VAT (8%)</span>
-                <span>{fmtVND(vat)}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-400 font-medium">Thuế VAT (8%)</span>
+                <span className="text-zinc-200 font-semibold">{fmtVND(vat)}</span>
               </div>
-              <div className="flex justify-between items-center border-t border-zinc-800 pt-2 text-left">
-                <span className="text-zinc-300 font-semibold">Tổng cộng</span>
-                <span className="font-bold text-lg" style={{ color: '#EAB308' }}>
+              <div className="flex justify-between items-center border-t border-zinc-800/80 pt-2.5 mt-0.5 text-left">
+                <span className="text-zinc-200 font-bold text-sm">Tổng cộng</span>
+                <span className="font-black text-lg text-gold tracking-tight">
                   {fmtVND(total)}
                 </span>
               </div>
@@ -273,7 +274,7 @@ export default function BookingSummary({ booking, step, onBack, onNext, canNext 
         <div className="flex items-center justify-between gap-4">
           <div className="text-left flex flex-col">
             <span className="text-zinc-500 text-[9px] uppercase font-black tracking-wider">Tổng cộng</span>
-            <span className="font-black text-base text-[#EAB308]">
+            <span className="font-black text-base text-gold">
               {fmtVND(total)}
             </span>
           </div>

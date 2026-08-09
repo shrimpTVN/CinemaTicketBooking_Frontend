@@ -29,7 +29,7 @@ export default function RewardsTab({ user, mockVouchers, handleCopyCode }) {
                 </span>
                 <span className="text-[10px] text-zinc-500">Hạn dùng: {voucher.expiry}</span>
               </div>
-              <h4 className="text-body2 font-bold text-white mt-1 leading-snug group-hover:text-cta-light transition-colors">
+              <h4 className="text-body2 font-bold text-white mt-1 leading-snug">
                 {voucher.title}
               </h4>
               <p className="text-[11px] text-zinc-400 leading-relaxed mt-1">

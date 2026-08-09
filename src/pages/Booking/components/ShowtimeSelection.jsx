@@ -568,33 +568,32 @@ export default function ShowtimeSelection({ booking, setBooking, movies, dateWin
                             key={st.id}
                             id={`showtime-${st.id}`}
                             onClick={() => setBooking((b) => ({ ...b, showtime: st }))}
-                            className="flex flex-col items-center justify-between rounded-xl border transition-all duration-200 cursor-pointer hover:-translate-y-0.5 text-center overflow-hidden"
-                            style={{
-                              width: '92px',
-                              height: '82px',
-                              background: sel ? 'var(--color-select)' : 'rgba(255,255,255,0.03)',
-                              borderColor: sel ? 'var(--color-select)' : 'rgba(255,255,255,0.07)',
-                              padding: 0,
-                            }}
+                            className={`flex flex-col items-center justify-between rounded-xl border transition-all duration-200 cursor-pointer hover:-translate-y-0.5 text-center overflow-hidden w-[96px] h-[74px] shrink-0 ${
+                              sel
+                                ? 'bg-[#0EA1CF] border-[#0EA1CF] shadow-lg shadow-[#0EA1CF]/30 scale-[1.02]'
+                                : 'bg-zinc-900/60 border-white/10 hover:border-[#0EA1CF]/60 hover:bg-zinc-800/80'
+                            }`}
                           >
                             <div className="flex-1 flex flex-col justify-center items-center pt-2">
-                              <span className="font-extrabold text-base tracking-wide" style={{ color: '#FFFFFF', lineHeight: 1.1 }}>
+                              <span className="font-extrabold text-sm tracking-tight text-white leading-none">
                                 {st.start}
                               </span>
-                              <span className="text-[11px] font-normal" style={{ color: sel ? 'rgba(255, 255, 255, 0.7)' : '#555', marginTop: '1px' }}>
+                              <span className={`text-[10px] font-medium mt-1 ${sel ? 'text-white/80' : 'text-zinc-400'}`}>
                                 ~ {st.end}
                               </span>
                             </div>
 
-                            <div
-                              className="w-full py-1 flex items-center justify-center border-t text-[10px] font-semibold"
-                              style={{
-                                background: sel ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0.25)',
-                                borderColor: sel ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                              }}
-                            >
-                              <span style={{ color: low ? (sel ? '#FFFFFF' : '#ef4444') : (sel ? '#FFFFFF' : '#737373') }}>
-                                {st.available}/{st.total || 100}
+                            <div className={`w-full py-1.5 flex items-center justify-center border-t ${
+                              sel
+                                ? 'bg-black/20 border-white/20'
+                                : 'bg-black/30 border-white/6'
+                            }`}>
+                              <span className={`text-[10px] font-semibold tracking-tight text-center leading-none block w-full ${
+                                sel
+                                  ? 'text-white'
+                                  : (low ? 'text-amber-400' : 'text-zinc-400')
+                              }`}>
+                                {st.available}/{st.total || 408}
                               </span>
                             </div>
                           </button>

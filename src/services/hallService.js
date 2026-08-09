@@ -22,6 +22,10 @@ export const getAllHallTypes = async () => {
   return USE_MOCK ? mockService.getAllHallTypes() : apiService.getAllHallTypes();
 };
 
+export const getHallTypeById = async (id) => {
+  return USE_MOCK ? mockService.getHallTypeById(id) : apiService.getHallTypeById(id);
+};
+
 export const getAllSeatTypes = async () => {
   return USE_MOCK ? mockService.getAllSeatTypes() : apiService.getAllSeatTypes();
 };

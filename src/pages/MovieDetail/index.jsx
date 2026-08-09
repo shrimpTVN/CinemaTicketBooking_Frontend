@@ -8,11 +8,13 @@ import AmbientGlow from '../../components/AmbientGlow';
 import AgeRatingTag from '../../components/AgeRatingTag';
 import apiClient from '../../services/apiClient';
 import { USE_MOCK } from '../../services/apiConfig';
+import { getCommentRatingsByMovieId, createCommentRating, updateCommentRating } from '../../services/commentRatingService';
 import ShowtimeSelector from './components/ShowtimeSelector';
-import ReviewSection from './components/ReviewSection';
+import ReviewSection, { ReviewStats, ReviewList } from './components/ReviewSection';
 import ReviewForm from './components/ReviewForm';
 import { useAuthStore } from '../../store/authStore';
 import FilmReelLoader from '../../components/FilmReelLoader';
+import ScrollReveal from '../../components/ScrollReveal';
 
 const renderStars = (ratingCount, sizeClass = "w-4 h-4") => {
   return (
@@ -84,29 +86,7 @@ export default function MovieDetail() {
   const [userRating, setUserRating] = useState(5);
   const [username, setUsername] = useState('');
   const [commentText, setCommentText] = useState('');
-  const [reviews, setReviews] = useState([
-    {
-      id: 1,
-      username: "Trần Anh Vũ",
-      date: "18/06/2026",
-      rating: 5,
-      comment: "Phim thực sự rất tuyệt vời! Kịch bản xuất sắc, lời thoại ý nghĩa và hình ảnh được trau chuốt từng khung hình."
-    },
-    {
-      id: 2,
-      username: "Lê Minh Hương",
-      date: "18/06/2026",
-      rating: 4,
-      comment: "Diễn xuất đỉnh cao của dàn cast gánh phim cực tốt. Nhạc phim cảm xúc, tuy nhiên đoạn kết hơi vội vàng."
-    },
-    {
-      id: 3,
-      username: "Nguyễn Công Danh",
-      date: "17/06/2026",
-      rating: 5,
-      comment: "Rất lâu rồi mới xem một tác phẩm Việt Nam chỉn chu thế này. Xứng đáng đồng tiền bát gạo ra rạp!"
-    }
-  ]);
+  const [reviews, setReviews] = useState([]);
 
   // Generate showtime dates
   useEffect(() => {
@@ -285,22 +265,80 @@ export default function MovieDetail() {
     navigate('/booking', { state: bookingState });
   };
 
-  const handleAddReview = (e) => {
+  const currentUser = useAuthStore((state) => state.user);
+
+  // Auto-populate logged-in user name
+  useEffect(() => {
+    if (currentUser) {
+      setUsername(currentUser.fullName || currentUser.name || currentUser.username || '');
+    }
+  }, [currentUser]);
+
+  // Fetch real comment ratings for current movie
+  useEffect(() => {
+    if (!movie?.id) return;
+    const fetchRealComments = async () => {
+      try {
+        const data = await getCommentRatingsByMovieId(movie.id);
+        setReviews(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn('Failed to load real comments:', err);
+        setReviews([]);
+      }
+    };
+    fetchRealComments();
+  }, [movie?.id]);
+
+  const handleAddReview = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
 
-    const newReview = {
-      id: Date.now(),
-      username: username.trim() || 'Người dùng ẩn danh',
-      date: new Date().toLocaleDateString('vi-VN'),
-      rating: userRating,
-      comment: commentText.trim()
-    };
+    if (!currentUser) {
+      alert("Vui lòng đăng nhập để gửi đánh giá phim!");
+      navigate('/login', { state: { from: `/movies/${id}` } });
+      return;
+    }
 
-    setReviews([newReview, ...reviews]);
-    setUsername('');
-    setCommentText('');
-    setUserRating(5);
+    try {
+      const userId = currentUser.id || currentUser.userId;
+      const existing = reviews.find(r => String(r.userId) === String(userId));
+
+      if (existing) {
+        // User has already commented -> Update existing review
+        const updated = await updateCommentRating(existing.id, {
+          movieId: movie.id,
+          userId: userId,
+          rating: userRating,
+          comment: commentText
+        });
+
+        setReviews(prev => prev.map(r => r.id === existing.id ? updated : r));
+        setCommentText('');
+        setUserRating(5);
+        alert("Bạn đã cập nhật lại đánh giá của mình cho bộ phim này!");
+      } else {
+        // Create new review
+        const newReview = await createCommentRating({
+          movieId: movie.id,
+          userId: userId,
+          rating: userRating,
+          comment: commentText
+        });
+
+        setReviews([newReview, ...reviews]);
+        setCommentText('');
+        setUserRating(5);
+        alert("Cảm ơn bạn đã gửi đánh giá cho bộ phim này!");
+      }
+    } catch (err) {
+      console.error('Failed to post/update comment rating:', err);
+      const errMsg = err?.response?.data?.message || err?.message || '';
+      if (errMsg.includes('purchased')) {
+        alert("Bạn cần mua vé xem phim này trước khi gửi đánh giá!");
+      } else {
+        alert("Đã xảy ra lỗi khi gửi đánh giá. Vui lòng thử lại!");
+      }
+    }
   };
 
   if (loading) {
@@ -325,7 +363,7 @@ export default function MovieDetail() {
   const mockFormats = movie.status === 'coming-soon' ? [] : [
     {
       name: '2D Lồng Tiếng',
-      price: 'Từ 80.000đ',
+      price: '80.000đ',
       times: ['09:00', '11:15', '13:45', '16:00', '18:30', '20:45'].map((t, idx) => {
         const [h, m] = t.split(':').map(Number);
         const endH = String((h + 2) % 24).padStart(2, '0');
@@ -341,7 +379,7 @@ export default function MovieDetail() {
     },
     {
       name: '2D Phụ Đề',
-      price: 'Từ 85.000đ',
+      price: '85.000đ',
       times: ['10:00', '12:30', '15:00', '17:30', '20:00', '22:15'].map((t, idx) => {
         const [h, m] = t.split(':').map(Number);
         const endH = String((h + 2) % 24).padStart(2, '0');
@@ -357,7 +395,7 @@ export default function MovieDetail() {
     },
     {
       name: 'IMAX Phụ Đề',
-      price: 'Từ 140.000đ',
+      price: '140.000đ',
       times: ['13:00', '19:00', '21:30'].map((t, idx) => {
         const [h, m] = t.split(':').map(Number);
         const endH = String((h + 2) % 24).padStart(2, '0');
@@ -398,7 +436,7 @@ export default function MovieDetail() {
       if (!groups[formatLabel]) {
         groups[formatLabel] = {
           name: formatLabel,
-          price: isImax ? 'Từ 140.000đ' : (is3D ? 'Từ 110.000đ' : 'Từ 85.000đ'),
+          price: isImax ? '140.000đ' : (is3D ? '110.000đ' : '85.000đ'),
           times: []
         };
       }
@@ -461,69 +499,71 @@ export default function MovieDetail() {
       <div className="max-w-7xl mx-auto px-4 relative z-10">
 
         {/* 2.1 Movie Overview overlap banner */}
-        <div className="flex flex-col sm:flex-row gap-6 md:gap-8 -mt-16 sm:-mt-24 md:-mt-32 items-start text-left mb-12">
-          {/* Vertical Movie Poster */}
-          <div className="w-44 sm:w-48 md:w-56 aspect-[2/3] rounded-lg overflow-hidden border-4 border-bg-dark bg-zinc-800 shadow-2xl flex-shrink-0">
-            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
-          </div>
-
-          {/* Details Column next to poster */}
-          <div className="flex-grow pt-2 sm:pt-4 md:pt-6">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <AgeRatingTag rating={movie.ageRating} />
-              <span className="border border-zinc-700 text-text-sub2 text-[11px] px-2.5 py-0.5 rounded font-bold">
-                {movie.country || 'Việt Nam'}
-              </span>
+        <ScrollReveal direction="up">
+          <div className="flex flex-col sm:flex-row gap-6 md:gap-8 -mt-16 sm:-mt-24 md:-mt-32 items-start text-left mb-12">
+            {/* Vertical Movie Poster */}
+            <div className="w-44 sm:w-48 md:w-56 aspect-[2/3] rounded-lg overflow-hidden border-4 border-bg-dark bg-zinc-800 shadow-2xl flex-shrink-0">
+              <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
             </div>
 
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-main leading-tight mb-3">
-              {movie.title}
-            </h1>
-
-            <p className="text-text-sub2 text-body2 mb-4 font-medium">
-              {movie.genre?.join(', ')}
-            </p>
-
-            {/* Stars rating area */}
-            <div className="flex items-center gap-2 mb-4">
-              {renderStars(5)}
-              <span className="text-gold font-bold text-body2 ml-1">
-                {movie.rating > 0 ? `${movie.rating}/10` : 'Chưa đánh giá'}
-              </span>
-              <span className="text-text-sub3 text-body3">
-                ({movie.rating > 0 ? '120 lượt đánh giá' : '0 lượt đánh giá'})
-              </span>
-            </div>
-
-            {/* Metadata icons info */}
-            <div className="flex items-center gap-6 text-text-sub3 text-body3">
-              <span className="flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {movie.duration} phút
-              </span>
-              <span className="flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {movie.releaseDate}
-              </span>
-            </div>
-
-            {/* Director & Cast */}
-            <div className="mt-4 pt-4 border-t border-zinc-800 space-y-1.5 text-body3">
-              <div>
-                <span className="text-text-sub3">Đạo diễn: </span>
-                <span className="text-text-sub1 font-medium">{movie.director}</span>
+            {/* Details Column next to poster */}
+            <div className="flex-grow pt-2 sm:pt-4 md:pt-6">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <AgeRatingTag rating={movie.ageRating} />
+                <span className="border border-zinc-700 text-text-sub2 text-[11px] px-2.5 py-0.5 rounded font-bold">
+                  {movie.country || 'Việt Nam'}
+                </span>
               </div>
-              <div>
-                <span className="text-text-sub3">Diễn viên: </span>
-                <span className="text-text-sub1 font-medium">{movie.cast?.join(', ')}</span>
+
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-main leading-tight mb-3">
+                {movie.title}
+              </h1>
+
+              <p className="text-text-sub2 text-body2 mb-4 font-medium">
+                {movie.genre?.join(', ')}
+              </p>
+
+              {/* Stars rating area */}
+              <div className="flex items-center gap-2 mb-4">
+                {renderStars(5)}
+                <span className="text-gold font-bold text-body2 ml-1">
+                  {movie.rating > 0 ? `${movie.rating}/10` : 'Chưa đánh giá'}
+                </span>
+                <span className="text-text-sub3 text-body3">
+                  ({reviews.length > 0 ? `${reviews.length} lượt đánh giá` : (movie.rating > 0 ? 'Đánh giá ban đầu' : 'Chưa có lượt đánh giá')})
+                </span>
+              </div>
+
+              {/* Metadata icons info */}
+              <div className="flex items-center gap-6 text-text-sub3 text-body3">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {movie.duration} phút
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {movie.releaseDate}
+                </span>
+              </div>
+
+              {/* Director & Cast */}
+              <div className="mt-4 pt-4 border-t border-zinc-800 space-y-1.5 text-body3">
+                <div>
+                  <span className="text-text-sub3">Đạo diễn: </span>
+                  <span className="text-text-sub1 font-medium">{movie.director}</span>
+                </div>
+                <div>
+                  <span className="text-text-sub3">Diễn viên: </span>
+                  <span className="text-text-sub1 font-medium">{movie.cast?.join(', ')}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* 2.2 Split content layout columns */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
@@ -532,67 +572,77 @@ export default function MovieDetail() {
           <div className="lg:col-span-3 space-y-12 text-left">
 
             {/* A. Description block */}
-            <section>
-              <SectionHeading hasBorder={true} className="mb-4">Mô tả</SectionHeading>
-              <p className="text-body2 text-text-sub2 leading-relaxed whitespace-pre-line">
-                {movie.description}
-              </p>
-            </section>
+            <ScrollReveal direction="up">
+              <section>
+                <SectionHeading hasBorder={true} className="mb-4">Mô tả</SectionHeading>
+                <p className="text-body2 text-text-sub2 leading-relaxed whitespace-pre-line">
+                  {movie.description}
+                </p>
+              </section>
+            </ScrollReveal>
 
             {/* B. Showtimes block */}
-            <ShowtimeSelector
-              movie={movie}
-              dates={dates}
-              selectedDateIndex={selectedDateIndex}
-              setSelectedDateIndex={setSelectedDateIndex}
-              formatsToDisplay={formatsToDisplay}
-              handleShowtimeClick={handleShowtimeClick}
-              hasNoShowtimes={hasNoShowtimes}
-            />
+            <ScrollReveal direction="up">
+              <ShowtimeSelector
+                movie={movie}
+                dates={dates}
+                selectedDateIndex={selectedDateIndex}
+                setSelectedDateIndex={setSelectedDateIndex}
+                formatsToDisplay={formatsToDisplay}
+                handleShowtimeClick={handleShowtimeClick}
+                hasNoShowtimes={hasNoShowtimes}
+              />
+            </ScrollReveal>
 
             {/* C. Review block */}
-            <section>
-              <SectionHeading hasBorder={true} className="mb-6">Đánh giá</SectionHeading>
+            <ScrollReveal direction="up">
+              <section>
+                <SectionHeading hasBorder={true} className="mb-6">Đánh giá</SectionHeading>
 
-              {/* Review Statistics & Write Form Header Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Statistics Box Left */}
-                <ReviewSection
-                  movie={movie}
+                {/* Top Row: Rating Stats (Left) & Write Review Form (Right) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                  <ReviewStats movie={movie} reviews={reviews} />
+
+                  <ReviewForm
+                    username={username}
+                    setUsername={setUsername}
+                    userRating={userRating}
+                    setUserRating={setUserRating}
+                    commentText={commentText}
+                    setCommentText={setCommentText}
+                    handleAddReview={handleAddReview}
+                  />
+                </div>
+
+                {/* Bottom Row: Full width filter buttons & User comments list */}
+                <ReviewList
                   filterRating={filterRating}
                   setFilterRating={setFilterRating}
                   filteredReviews={filteredReviews}
                 />
-
-                {/* Write Review Card Right */}
-                <ReviewForm
-                  username={username}
-                  setUsername={setUsername}
-                  userRating={userRating}
-                  setUserRating={setUserRating}
-                  commentText={commentText}
-                  setCommentText={setCommentText}
-                  handleAddReview={handleAddReview}
-                />
-              </div>
-            </section>
+              </section>
+            </ScrollReveal>
           </div>
 
           {/* 2.2.2 Right column sidebar: related movies list */}
           <div className="lg:col-span-1 space-y-6 text-left">
-            <SectionHeading hasBorder={true} className="mb-4">Phim tương tự</SectionHeading>
+            <ScrollReveal direction="up">
+              <SectionHeading hasBorder={true} className="mb-4">Phim tương tự</SectionHeading>
 
-            <div className="flex flex-col gap-6">
-              {relatedMovies.length === 0 ? (
-                <div className="text-text-sub3 text-body3 py-4 text-center">
-                  Không tìm thấy phim tương tự.
-                </div>
-              ) : (
-                relatedMovies.map((movie) => (
-                  <MovieCard key={movie.id} movie={movie} />
-                ))
-              )}
-            </div>
+              <div className="flex flex-col gap-6">
+                {relatedMovies.length === 0 ? (
+                  <div className="text-text-sub3 text-body3 py-4 text-center">
+                    Không tìm thấy phim tương tự.
+                  </div>
+                ) : (
+                  relatedMovies.map((movie, idx) => (
+                    <ScrollReveal key={movie.id} delay={idx * 60} direction="up">
+                      <MovieCard movie={movie} />
+                    </ScrollReveal>
+                  ))
+                )}
+              </div>
+            </ScrollReveal>
           </div>
 
         </div>

@@ -211,9 +211,9 @@ export const useBookingStore = create((set, get) => ({
     if (selectedSeats.length > ticketCount) {
       const extraSeats = selectedSeats.slice(ticketCount);
       const user = useAuthStore.getState().user;
-      const userId = user?.id || 1;
+      const userId = user?.id || user?.userId;
       const showtime = get().showtime;
-      if (extraSeats.length > 0 && showtime && !USE_MOCK) {
+      if (userId && extraSeats.length > 0 && showtime && !USE_MOCK) {
         apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
           seatIds: extraSeats.map(s => s.dbId),
           userId
@@ -657,7 +657,8 @@ export const useBookingStore = create((set, get) => ({
     if (!Array.isArray(seatsToToggle) || seatsToToggle.length === 0) return;
     const { layout, selectedSeats, ticketCount, showtime } = get();
     const user = useAuthStore.getState().user;
-    const userId = user?.id || 1;
+    const userId = user?.id || user?.userId;
+    if (!userId) return;
 
     const validSeats = seatsToToggle.filter((s) => s && s.status !== 'booked' && s.status !== 'held');
     if (validSeats.length === 0) return;
@@ -710,7 +711,7 @@ export const useBookingStore = create((set, get) => ({
     if (!Array.isArray(seatsToRelease) || seatsToRelease.length === 0) return;
     const { layout, selectedSeats, showtime } = get();
     const user = useAuthStore.getState().user;
-    const userId = user?.id || 1;
+    const userId = user?.id || user?.userId;
 
     const releaseIds = new Set(seatsToRelease.map((s) => s.id));
     const dbIdsToRelease = seatsToRelease.map((s) => s.dbId).filter(Boolean);
@@ -743,27 +744,31 @@ export const useBookingStore = create((set, get) => ({
   resetSelection: async () => {
     const { layout, selectedSeats, showtime } = get();
     const user = useAuthStore.getState().user;
-    const userId = user?.id || 1;
+    const userId = user?.id || user?.userId;
     
-    if (selectedSeats.length > 0 && showtime && !USE_MOCK) {
+    const hasActiveInvoice = !!sessionStorage.getItem('current_booking_invoice') || !!localStorage.getItem('pending_vnpay_booking');
+
+    if (!hasActiveInvoice && selectedSeats.length > 0 && showtime && !USE_MOCK) {
       try {
         const seatIds = selectedSeats.map(s => s.dbId);
         await apiClient.post(`/showtime-seats/showtimes/${showtime.id}/release`, {
-          seatIds: seatIds,
-          userId: userId
+          seatIds,
+          userId
         });
-      } catch (error) {
-        console.error("Failed to release seats on reset:", error);
+      } catch (err) {
+        console.error("Failed to release seats on reset:", err);
       }
     }
-    
-    const nextLayout = { ...layout };
-    Object.keys(nextLayout).forEach(id => {
-      if (nextLayout[id].status === 'selected') {
-        nextLayout[id].status = 'available';
-      }
-    });
-    set({ selectedSeats: [], layout: nextLayout });
+
+    if (!hasActiveInvoice) {
+      const nextLayout = { ...layout };
+      Object.keys(nextLayout).forEach(id => {
+        if (nextLayout[id].status === 'selected') {
+          nextLayout[id].status = 'available';
+        }
+      });
+      set({ selectedSeats: [], layout: nextLayout });
+    }
   },
 
   // Countdown timer giữ ghế dựa trên mốc thời gian thực tế (tránh bị reset khi chuyển bước)
