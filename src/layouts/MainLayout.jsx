@@ -9,6 +9,7 @@ import { Search, Bell, CircleUser, ChevronDown, Menu, X, History, LogOut, Layout
 export default function MainLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
@@ -85,8 +86,12 @@ export default function MainLayout() {
           {/* Left Side: Logo & Mobile Mua Ngay */}
           <div className="flex items-center space-x-3">
             {/* Logo */}
-            <Link to="/" className="text-heading2 text-cta tracking-wider uppercase font-bold">
-              LOGO
+            <Link to="/" className="flex items-center group">
+              <img
+                src="/images/logo.png"
+                alt="Cinema Logo"
+                className="h-6 md:h-7 w-auto object-contain transition-transform group-hover:scale-105"
+              />
             </Link>
 
             {/* Mobile Mua ngay Button */}
@@ -130,7 +135,7 @@ export default function MainLayout() {
             </NavLink>
           </nav>
 
-          {/* Right Header: Search, Bell, Sign In, Sign Up + Hamburger on Mobile */}
+          {/* Right Header: Search, Bell, Sign In, Sign Up on Desktop; Hamburger on Mobile */}
           <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-5">
             {/* Search Icon (Desktop only) */}
             <button
@@ -139,90 +144,93 @@ export default function MainLayout() {
             >
               <Search className="w-5 h-5" />
             </button>
-            {/* Notification Bell */}
-            <button className="flex items-center justify-center w-9 h-9 text-text-sub3 hover:text-text-main transition-colors relative cursor-pointer">
-              <Bell className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
-              <span className="absolute top-2.5 right-2.5 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-cta rounded-full"></span>
+
+            {/* Notification Bell (Desktop only) */}
+            <button className="hidden md:flex items-center justify-center w-9 h-9 text-text-sub3 hover:text-text-main transition-colors relative cursor-pointer">
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-2 right-2 w-2 h-2 bg-cta rounded-full"></span>
             </button>
 
-            {/* Vertical Divider */}
+            {/* Vertical Divider (Desktop only) */}
             <span className="hidden md:block h-5 w-px bg-zinc-800"></span>
 
-            {/* Auth Section */}
-            {user ? (
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    const nextState = !isProfileDropdownOpen;
-                    setIsProfileDropdownOpen(nextState);
-                    if (nextState) {
-                      setSearchOpen(false);
-                    }
-                  }}
-                  className={`transition-colors cursor-pointer flex items-center justify-center h-9 space-x-1.5 sm:space-x-2 text-body3 font-bold ${isProfileDropdownOpen ? 'text-cta' : 'text-text-sub1 hover:text-text-main'}`}
-                >
-                  <CircleUser className="w-5 h-5 sm:w-6 sm:h-6 text-text-sub3" strokeWidth={1.5} />
-                  <span className="hidden sm:inline max-w-[100px] truncate">{user.fullName}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-text-sub3 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-cta' : ''}`} />
-                </button>
+            {/* Auth Section (Desktop only) */}
+            <div className="hidden md:block">
+              {user ? (
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      const nextState = !isProfileDropdownOpen;
+                      setIsProfileDropdownOpen(nextState);
+                      if (nextState) {
+                        setSearchOpen(false);
+                      }
+                    }}
+                    className={`transition-colors cursor-pointer flex items-center justify-center h-9 space-x-2 text-body3 font-bold ${isProfileDropdownOpen ? 'text-cta' : 'text-text-sub1 hover:text-text-main'}`}
+                  >
+                    <CircleUser className="w-6 h-6 text-text-sub3" strokeWidth={1.5} />
+                    <span className="max-w-[100px] truncate">{user.fullName}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-text-sub3 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-cta' : ''}`} />
+                  </button>
 
-                {isProfileDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsProfileDropdownOpen(false)}></div>
-                    <div className="absolute right-0 mt-2.5 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-xl py-1.5 z-50 animate-slide-down">
-                      <Link
-                        to="/profile?tab=info"
-                        state={{ activeTab: 'info' }}
-                        onClick={() => setIsProfileDropdownOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800 transition-colors"
-                      >
-                        <CircleUser className="w-4 h-4 text-text-sub3" strokeWidth={1.5} />
-                        Thông tin cá nhân
-                      </Link>
-                      <Link
-                        to="/profile?tab=history"
-                        state={{ activeTab: 'history' }}
-                        onClick={() => setIsProfileDropdownOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800 transition-colors border-t border-zinc-800"
-                      >
-                        <History className="w-4 h-4 text-text-sub3" />
-                        Lịch sử giao dịch
-                      </Link>
-                      {user.role === 'ADMIN' && (
+                  {isProfileDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsProfileDropdownOpen(false)}></div>
+                      <div className="absolute right-0 mt-2.5 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-xl py-1.5 z-50 animate-slide-down">
                         <Link
-                          to="/admin"
+                          to="/profile?tab=info"
+                          state={{ activeTab: 'info' }}
                           onClick={() => setIsProfileDropdownOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2.5 text-body3 text-cta hover:text-cta-light hover:bg-zinc-800 transition-colors border-t border-zinc-800 font-bold"
+                          className="flex items-center gap-2 px-4 py-2.5 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800 transition-colors"
                         >
-                          <LayoutDashboard className="w-4 h-4 text-cta" />
-                          Dashboard
+                          <CircleUser className="w-4 h-4 text-text-sub3" strokeWidth={1.5} />
+                          Thông tin cá nhân
                         </Link>
-                      )}
-                      <button
-                        onClick={() => {
-                          setIsProfileDropdownOpen(false);
-                          logout();
-                          navigate('/');
-                        }}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-body3 text-red-400 hover:text-red-300 hover:bg-zinc-800 transition-colors text-left cursor-pointer border-t border-zinc-800"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Đăng xuất
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2.5 sm:space-x-3">
-                <Link to="/login" className="flex items-center justify-center h-9 text-body3 text-text-sub3 hover:text-text-main font-bold transition-colors">
-                  Đăng nhập
-                </Link>
-                <Link to="/register" className="hidden md:block text-body3 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-text-main px-3.5 py-1.5 rounded font-bold transition-colors">
-                  Đăng ký
-                </Link>
-              </div>
-            )}
+                        <Link
+                          to="/profile?tab=history"
+                          state={{ activeTab: 'history' }}
+                          onClick={() => setIsProfileDropdownOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800 transition-colors border-t border-zinc-800"
+                        >
+                          <History className="w-4 h-4 text-text-sub3" />
+                          Lịch sử giao dịch
+                        </Link>
+                        {user.role === 'ADMIN' && (
+                          <Link
+                            to="/admin"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-body3 text-cta hover:text-cta-light hover:bg-zinc-800 transition-colors border-t border-zinc-800 font-bold"
+                          >
+                            <LayoutDashboard className="w-4 h-4 text-cta" />
+                            Dashboard
+                          </Link>
+                        )}
+                        <button
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false);
+                            logout();
+                            navigate('/');
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-body3 text-red-400 hover:text-red-300 hover:bg-zinc-800 transition-colors text-left cursor-pointer border-t border-zinc-800"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Đăng xuất
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <Link to="/login" className="flex items-center justify-center h-9 text-body3 text-text-sub3 hover:text-text-main font-bold transition-colors">
+                    Đăng nhập
+                  </Link>
+                  <Link to="/register" className="text-body3 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-text-main px-3.5 py-1.5 rounded font-bold transition-colors">
+                    Đăng ký
+                  </Link>
+                </div>
+              )}
+            </div>
 
             {/* Hamburger Button (Far right, visible on mobile only) */}
             <button
@@ -300,11 +308,11 @@ export default function MainLayout() {
 
         {/* Mobile Navigation Dropdown Menu */}
         {isMenuOpen && (
-          <nav className="md:hidden absolute top-16 left-0 w-full bg-bg-dark border-b border-[#222222] flex flex-col py-4 z-40 animate-slide-down">
-            <div className="flex flex-col items-center w-full px-4 space-y-3">
+          <nav className="md:hidden absolute top-16 left-0 w-full bg-[#0d0d0e]/95 backdrop-blur-xl border-b border-zinc-800 flex flex-col py-4 z-40 animate-slide-down max-h-[calc(100vh-4rem)] overflow-y-auto shadow-2xl">
+            <div className="flex flex-col w-full px-4 space-y-3">
               {/* Mobile Search Input */}
-              <div className="relative w-full max-w-[280px] mb-2">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
+              <div className="relative w-full mb-1">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
                   <Search className="w-4 h-4" />
                 </span>
                 <input
@@ -312,7 +320,7 @@ export default function MainLayout() {
                   placeholder="Tìm kiếm phim..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-10 pl-9 pr-8 bg-zinc-900 border border-zinc-800 text-text-main rounded-lg text-body3 placeholder-zinc-500 focus:outline-hidden focus:border-cta transition-colors"
+                  className="w-full h-10 pl-9 pr-8 bg-zinc-900/90 border border-zinc-800 text-text-main rounded-lg text-body3 placeholder-zinc-500 focus:outline-hidden focus:border-cta transition-colors"
                 />
                 {searchQuery && (
                   <button
@@ -362,18 +370,119 @@ export default function MainLayout() {
                 )}
               </div>
 
-              <NavLink to="/" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)} end>
-                Trang chủ
-              </NavLink>
-              <NavLink to="/movies" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
-                Phim
-              </NavLink>
-              <NavLink to="/hall" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
-                Phòng chiếu
-              </NavLink>
-              <NavLink to="/events" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
-                Sự kiện
-              </NavLink>
+              {/* Navigation Links */}
+              <div className="flex flex-col space-y-1">
+                <NavLink to="/" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)} end>
+                  Trang chủ
+                </NavLink>
+                <NavLink to="/movies" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                  Phim
+                </NavLink>
+                <NavLink to="/hall" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                  Phòng chiếu
+                </NavLink>
+                <NavLink to="/events" className={getMobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                  Sự kiện
+                </NavLink>
+              </div>
+
+              {/* Divider */}
+              <div className="w-full border-t border-zinc-800/80 my-1"></div>
+
+              {/* Notifications Link */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-between py-2.5 px-3.5 text-body2 text-text-sub1 hover:text-text-main hover:bg-zinc-900/60 rounded-lg transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <Bell className="w-4.5 h-4.5 text-text-sub3" />
+                  <span>Thông báo</span>
+                </div>
+                <span className="w-2 h-2 bg-cta rounded-full"></span>
+              </button>
+
+              {/* User Account / Auth Section */}
+              <div className="w-full border-t border-zinc-800/80 pt-2">
+                {user ? (
+                  <div className="w-full bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 space-y-2">
+                    {/* User Card Header */}
+                    <div className="flex items-center gap-3 pb-2 border-b border-zinc-800/80 px-1">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                        <CircleUser className="w-5 h-5 text-white" strokeWidth={1.5} />
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="text-body2 font-bold text-text-main truncate">{user.fullName || user.email?.split('@')[0]}</div>
+                        <div className="text-[11px] text-text-sub3 truncate">{user.email}</div>
+                      </div>
+                    </div>
+
+                    {/* Action Links */}
+                    <div className="flex flex-col space-y-0.5 pt-0.5">
+                      <Link
+                        to="/profile?tab=info"
+                        state={{ activeTab: 'info' }}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-3 px-2.5 py-2 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800/60 rounded-lg transition-colors"
+                      >
+                        <CircleUser className="w-4 h-4 text-text-sub3" strokeWidth={1.5} />
+                        <span>Thông tin cá nhân</span>
+                      </Link>
+
+                      <Link
+                        to="/profile?tab=history"
+                        state={{ activeTab: 'history' }}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-3 px-2.5 py-2 text-body3 text-text-sub2 hover:text-text-main hover:bg-zinc-800/60 rounded-lg transition-colors"
+                      >
+                        <History className="w-4 h-4 text-text-sub3" />
+                        <span>Lịch sử giao dịch</span>
+                      </Link>
+
+                      {user.role === 'ADMIN' && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-3 px-2.5 py-2 text-body3 text-cta font-bold hover:bg-zinc-800/60 rounded-lg transition-colors"
+                        >
+                          <LayoutDashboard className="w-4 h-4 text-cta" />
+                          <span>Dashboard Quản trị</span>
+                        </Link>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          logout();
+                          navigate('/');
+                        }}
+                        className="w-full flex items-center gap-3 px-2.5 py-2 text-body3 text-red-400 hover:text-red-300 hover:bg-zinc-800/60 rounded-lg transition-colors text-left cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Đăng xuất</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-2 pt-1 w-full">
+                    <Link
+                      to="/login"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="w-full py-2.5 text-center text-body2 font-bold text-text-main bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                    >
+                      Đăng nhập
+                    </Link>
+                    <Link
+                      to="/register"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="w-full py-2.5 text-center text-body2 font-bold text-text-main bg-cta hover:bg-opacity-90 rounded-lg transition-colors"
+                    >
+                      Đăng ký tài khoản
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </nav>
         )}
@@ -389,9 +498,12 @@ export default function MainLayout() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 pb-10 border-b border-zinc-800/40">
             {/* Column 1: Brand & Contact */}
             <div className="space-y-3 text-left">
-              {/* LOGO placeholder kept intact for user update */}
-              <Link to="/" className="inline-block text-2xl font-bold text-white tracking-wider uppercase">
-                LOGO
+              <Link to="/" className="inline-block group">
+                <img
+                  src="/images/logo.png"
+                  alt="Cinema Logo"
+                  className="h-7 w-auto object-contain transition-transform group-hover:scale-105"
+                />
               </Link>
               <p className="text-xs text-zinc-400 leading-relaxed font-light">
                 Hệ thống rạp chiếu phim hiện đại. Đặt vé xem phim trực tuyến nhanh chóng, tiện lợi.

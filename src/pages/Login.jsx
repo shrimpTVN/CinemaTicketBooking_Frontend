@@ -282,9 +282,13 @@ export default function Login() {
         <div className="max-w-7xl mx-auto px-4">
           <Link
             to="/"
-            className="text-heading2 text-cta tracking-wider uppercase font-bold hover:text-cta-light transition-colors"
+            className="inline-flex items-center group"
           >
-            LOGO
+            <img
+              src="/images/logo.png"
+              alt="Cinema Logo"
+              className="h-6 md:h-7 w-auto object-contain transition-transform group-hover:scale-105"
+            />
           </Link>
         </div>
       </div>

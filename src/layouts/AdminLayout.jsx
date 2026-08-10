@@ -268,15 +268,14 @@ export default function AdminLayout() {
         >
           <Link
             to="/"
-            className="flex items-center gap-2.5 min-w-0"
+            className="flex items-center gap-2.5 min-w-0 group"
             title="Về trang chủ"
           >
-            <span
-              className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm"
-              style={{ background: '#CF0F47', color: '#fff' }}
-            >
-              C
-            </span>
+            <img
+              src="/images/logo.png"
+              alt="Cinema Logo"
+              className="h-6 w-auto object-contain shrink-0 transition-transform group-hover:scale-105"
+            />
             {!collapsed && (
               <span
                 className="font-black text-white truncate"
