@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, Plus, Edit2, CheckCircle, XCircle, Sofa, X } from 'lucide-react';
+import { Search, Plus, Edit2, CheckCircle, XCircle, Sofa, X, Upload } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
+import { uploadSeatTypeImage } from '../../../services/mediaService';
 import Toast from '../../../components/Toast';
 
 function AdminCard({ children, className = '' }) {
@@ -34,6 +35,7 @@ export default function AdminSeatTypes() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = 'success', title) => {
@@ -76,6 +78,22 @@ export default function AdminSeatTypes() {
       status: isSeatTypeActive(s.status) ? 'ON' : 'OFF',
     });
     setShowModal(true);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingImage(true);
+      const url = await uploadSeatTypeImage(file);
+      setForm((p) => ({ ...p, image: url }));
+      addToast('Tải ảnh loại ghế thành công!', 'success');
+    } catch (err) {
+      console.error('Failed to upload seat type image:', err);
+      addToast('Không thể tải ảnh lên, vui lòng thử lại!', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -294,14 +312,51 @@ export default function AdminSeatTypes() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Link hình ảnh</label>
-                <input
-                  value={form.image}
-                  onChange={e => setForm({ ...form, image: e.target.value })}
-                  className="w-full text-sm text-white rounded-xl px-3 py-2.5 focus:outline-none"
-                  style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
-                  placeholder="https://..."
-                />
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Hình ảnh loại ghế</label>
+                <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <label className="flex items-center justify-center px-3.5 py-2.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold rounded-xl border border-white/10 cursor-pointer transition-all shrink-0 select-none">
+                      {uploadingImage ? (
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Tải lên...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                          Tải từ máy
+                        </span>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        disabled={uploadingImage}
+                        className="hidden"
+                      />
+                    </label>
+                    <input
+                      value={form.image}
+                      onChange={e => setForm({ ...form, image: e.target.value })}
+                      className="w-full text-sm text-white rounded-xl px-3 py-2.5 focus:outline-none"
+                      style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
+                      placeholder="Hoặc dán link ảnh https://..."
+                    />
+                  </div>
+                  {form.image && (
+                    <div className="flex items-center gap-3 p-2 rounded-xl bg-black/40 border border-white/5">
+                      <img src={form.image} alt="Preview" className="w-10 h-10 object-cover rounded-lg shrink-0" />
+                      <span className="text-xs text-zinc-400 truncate flex-1">{form.image}</span>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, image: '' })}
+                        className="text-zinc-500 hover:text-rose-400 text-xs p-1 cursor-pointer"
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
