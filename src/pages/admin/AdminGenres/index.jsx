@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, Edit2, Trash2, Tag, X, Save } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
+import Toast from '../../../components/Toast';
 
 function AdminCard({ children, className = '' }) {
   return (
@@ -10,7 +11,7 @@ function AdminCard({ children, className = '' }) {
   );
 }
 
-const EMPTY_FORM = { name: '' };
+const EMPTY_FORM = { name: '', description: '' };
 
 export default function AdminGenres() {
   const [genres, setGenres] = useState([]);
@@ -21,6 +22,14 @@ export default function AdminGenres() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = 'success', title) => {
+    const id = Date.now();
+    setToasts((p) => [...p, { id, message, type, title }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+  }, []);
+  const removeToast = (id) => setToasts((p) => p.filter((t) => t.id !== id));
 
   useEffect(() => {
     const fetch = async () => {
@@ -45,37 +54,60 @@ export default function AdminGenres() {
   }, [genres, searchQuery]);
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowModal(true); };
-  const openEdit = (g) => { setEditing(g); setForm({ name: g.name || '' }); setShowModal(true); };
+  const openEdit = (g) => { setEditing(g); setForm({ name: g.name || '', description: g.description || '' }); setShowModal(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
+
+    const payload = {
+      name: form.name.trim(),
+      description: form.description?.trim() || `Thể loại phim ${form.name.trim()}`,
+    };
+
     try {
       if (editing) {
-        await apiClient.patch(`/genres/${editing.id}`, form);
-        setGenres(prev => prev.map(g => g.id === editing.id ? { ...g, ...form } : g));
+        const res = await apiClient.patch(`/genres/${editing.id}`, payload);
+        const updated = res?.data || res || { ...editing, ...payload };
+        setGenres(prev => prev.map(g => g.id === editing.id ? { ...g, ...updated } : g));
+        addToast(`Đã cập nhật thể loại "${payload.name}"`, 'success');
       } else {
-        const res = await apiClient.post('/genres', form);
+        const res = await apiClient.post('/genres', payload);
         const created = res?.data || res;
         setGenres(prev => [...prev, created]);
+        addToast(`Đã thêm thể loại mới "${payload.name}"`, 'success');
       }
       setShowModal(false);
     } catch (err) {
       console.error('AdminGenres save error:', err);
+      const status = err?.response?.status;
+      if (status === 403 || status === 401) {
+        addToast('Lỗi 403 (Access Denied): Tài khoản hiện tại không có quyền ADMIN!', 'error', 'Từ chối truy cập');
+      } else {
+        addToast(err?.response?.data?.message || 'Không thể lưu thể loại. Vui lòng thử lại.', 'error');
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Xóa thể loại này?')) return;
+    const target = genres.find(g => g.id === id);
+    if (!window.confirm(`Xóa thể loại "${target?.name || ''}"?`)) return;
     setDeletingId(id);
     try {
       await apiClient.delete(`/genres/${id}`);
       setGenres(prev => prev.filter(g => g.id !== id));
+      addToast(`Đã xóa thể loại "${target?.name || ''}"`, 'success');
     } catch (err) {
       console.error('AdminGenres delete error:', err);
+      const status = err?.response?.status;
+      if (status === 403 || status === 401) {
+        addToast('Lỗi 403 (Access Denied): Tài khoản hiện tại không có quyền ADMIN!', 'error', 'Từ chối truy cập');
+      } else {
+        addToast('Không thể xóa thể loại. Vui lòng thử lại.', 'error');
+      }
     } finally {
       setDeletingId(null);
     }
@@ -89,6 +121,8 @@ export default function AdminGenres() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-5xl mx-auto">
+      <Toast toasts={toasts} onRemove={removeToast} />
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-64">
@@ -137,7 +171,12 @@ export default function AdminGenres() {
                     style={{ background: `${color}18`, color }}>
                     <Tag className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-white text-sm font-semibold truncate">{g.name}</span>
+                  <div className="min-w-0">
+                    <span className="text-white text-sm font-semibold truncate block">{g.name}</span>
+                    {g.description && (
+                      <span className="text-zinc-500 text-[10px] truncate block">{g.description}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-0.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
@@ -172,16 +211,27 @@ export default function AdminGenres() {
             </div>
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Tên thể loại</label>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Tên thể loại *</label>
                 <input
                   type="text"
                   required
                   value={form.name}
-                  onChange={e => setForm({ name: e.target.value })}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                   className="w-full text-sm text-white rounded-xl px-3 py-2.5 focus:outline-none"
                   style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
                   placeholder="VD: Hành động, Phiêu lưu..."
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Mô tả thể loại</label>
+                <textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  className="w-full text-sm text-white rounded-xl px-3 py-2.5 focus:outline-none resize-none"
+                  style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
+                  placeholder="VD: Các bộ phim kịch tính, hấp dẫn..."
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2 border-t border-white/5">

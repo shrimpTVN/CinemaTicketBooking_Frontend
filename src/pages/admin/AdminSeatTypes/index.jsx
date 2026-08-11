@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, Edit2, CheckCircle, XCircle, Sofa, X } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
+import Toast from '../../../components/Toast';
 
 function AdminCard({ children, className = '' }) {
   return (
@@ -10,14 +11,20 @@ function AdminCard({ children, className = '' }) {
   );
 }
 
+const isSeatTypeActive = (status) => {
+  if (!status) return false;
+  const s = String(status).toUpperCase();
+  return s === 'ACTIVE' || s === 'ON' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
 function StatusBadge({ status }) {
-  const active = status === 'ACTIVE' || status === 'active';
+  const active = isSeatTypeActive(status);
   return active
     ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20"><CheckCircle className="w-3 h-3" />Hoạt động</span>
     : <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-rose-500/10 text-rose-400 border-rose-500/20"><XCircle className="w-3 h-3" />Ngừng</span>;
 }
 
-const EMPTY_FORM = { name: '', priceSurcharge: '', description: '', image: '', status: 'ACTIVE' };
+const EMPTY_FORM = { name: '', priceSurcharge: '', description: '', image: '', status: 'ON' };
 
 export default function AdminSeatTypes() {
   const [seatTypes, setSeatTypes] = useState([]);
@@ -27,6 +34,14 @@ export default function AdminSeatTypes() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = 'success', title) => {
+    const id = Date.now();
+    setToasts((p) => [...p, { id, message, type, title }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+  }, []);
+  const removeToast = (id) => setToasts((p) => p.filter((t) => t.id !== id));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,7 +73,7 @@ export default function AdminSeatTypes() {
       priceSurcharge: s.priceSurcharge || '',
       description: s.description || '',
       image: s.image || '',
-      status: s.status || 'ACTIVE',
+      status: isSeatTypeActive(s.status) ? 'ON' : 'OFF',
     });
     setShowModal(true);
   };
@@ -77,16 +92,24 @@ export default function AdminSeatTypes() {
     try {
       if (editing) {
         const res = await apiClient.patch(`/seat-types/${editing.id}`, payload);
-        const updated = res?.data || { ...editing, ...payload };
+        const updated = res?.data || res || { ...editing, ...payload };
         setSeatTypes(prev => prev.map(s => s.id === editing.id ? updated : s));
+        addToast(`Đã cập nhật loại ghế "${payload.name}"`, 'success');
       } else {
         const res = await apiClient.post('/seat-types', payload);
         const created = res?.data || res;
         setSeatTypes(prev => [...prev, created]);
+        addToast(`Đã thêm loại ghế "${payload.name}"`, 'success');
       }
       setShowModal(false);
     } catch (err) {
       console.error('AdminSeatTypes save error:', err);
+      const status = err?.response?.status;
+      if (status === 403 || status === 401) {
+        addToast('Lỗi 403 (Access Denied): Tài khoản hiện tại không có quyền ADMIN!', 'error', 'Từ chối truy cập');
+      } else {
+        addToast('Không thể lưu loại ghế. Vui lòng thử lại.', 'error');
+      }
     } finally {
       setSaving(false);
     }
@@ -101,12 +124,14 @@ export default function AdminSeatTypes() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-6xl mx-auto">
+      <Toast toasts={toasts} onRemove={removeToast} />
+
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Tổng loại ghế', value: seatTypes.length, color: '#CF0F47', bg: 'rgba(207,15,71,0.1)' },
-          { label: 'Đang hoạt động', value: seatTypes.filter(s => s.status === 'ACTIVE' || s.status === 'active').length, color: '#10B981', bg: 'rgba(16,185,129,0.1)' },
-          { label: 'Ngừng sử dụng', value: seatTypes.filter(s => s.status !== 'ACTIVE' && s.status !== 'active').length, color: '#F43F5E', bg: 'rgba(244,63,94,0.1)' },
+          { label: 'Đang hoạt động', value: seatTypes.filter(s => isSeatTypeActive(s.status)).length, color: '#10B981', bg: 'rgba(16,185,129,0.1)' },
+          { label: 'Ngừng sử dụng', value: seatTypes.filter(s => !isSeatTypeActive(s.status)).length, color: '#F43F5E', bg: 'rgba(244,63,94,0.1)' },
           { label: 'Phụ thu cao nhất', value: seatTypes.length ? `${Math.max(...seatTypes.map(s => Number(s.priceSurcharge || 0))).toLocaleString('vi-VN')} đ` : '--', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
         ].map(k => (
           <AdminCard key={k.label} className="p-4 flex items-center gap-3">
@@ -287,8 +312,8 @@ export default function AdminSeatTypes() {
                   className="w-full text-sm text-white rounded-xl px-3 py-2.5 focus:outline-none"
                   style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
-                  <option value="ACTIVE">Hoạt động</option>
-                  <option value="INACTIVE">Ngừng sử dụng</option>
+                  <option value="ON">Hoạt động</option>
+                  <option value="OFF">Ngừng sử dụng</option>
                 </select>
               </div>
 

@@ -46,25 +46,31 @@ export default function AdminMovies() {
 
   // CRUD handlers
   const handleSave = async (payload) => {
-    let ok;
-    if (editMovie) {
-      const updated = await updateMovie(editMovie.id, payload);
-      ok = !!updated;
-      if (ok) {
-        setMovies((p) => p.map((m) => (m.id === editMovie.id ? updated : m)));
-        addToast(`Đã cập nhật phim "${payload.title}"`, 'success');
+    try {
+      if (editMovie) {
+        const updated = await updateMovie(editMovie.id, payload);
+        if (updated) {
+          setMovies((p) => p.map((m) => (m.id === editMovie.id ? updated : m)));
+          addToast(`Đã cập nhật phim "${payload.title}"`, 'success');
+        }
+      } else {
+        const created = await createMovie(payload);
+        if (created) {
+          setMovies((p) => [created, ...p]);
+          addToast(`Đã thêm phim "${payload.title}"`, 'success');
+        }
       }
-    } else {
-      const created = await createMovie(payload);
-      ok = !!created;
-      if (ok) {
-        setMovies((p) => [created, ...p]);
-        addToast(`Đã thêm phim "${payload.title}"`, 'success');
+      setFormOpen(false);
+      setEditMovie(null);
+    } catch (err) {
+      console.error('Lỗi khi lưu phim:', err);
+      const status = err?.response?.status;
+      if (status === 403 || status === 401) {
+        addToast('Lỗi 403 (Access Denied): Tài khoản của bạn không có quyền ADMIN trên Backend!', 'error', 'Từ chối truy cập');
+      } else {
+        addToast(err?.response?.data?.message || 'Có lỗi xảy ra khi lưu phim, vui lòng kiểm tra dữ liệu và thử lại.', 'error');
       }
     }
-    if (!ok) addToast('Có lỗi xảy ra, vui lòng thử lại', 'error');
-    setFormOpen(false);
-    setEditMovie(null);
   };
 
   const handleToggleStatus = async (movie) => {
@@ -85,12 +91,20 @@ export default function AdminMovies() {
       genre: movie.genre || [],
     };
     
-    const updated = await updateMovie(movie.id, payload);
-    if (updated) {
-      setMovies((p) => p.map((m) => (m.id === movie.id ? updated : m)));
-      addToast(`Đã ${targetStatus === 'ON' ? 'bật hoạt động' : 'dừng chiếu'} phim "${movie.title}"`, 'success');
-    } else {
-      addToast('Cập nhật trạng thái thất bại', 'error');
+    try {
+      const updated = await updateMovie(movie.id, payload);
+      if (updated) {
+        setMovies((p) => p.map((m) => (m.id === movie.id ? updated : m)));
+        addToast(`Đã ${targetStatus === 'ON' ? 'bật hoạt động' : 'dừng chiếu'} phim "${movie.title}"`, 'success');
+      }
+    } catch (err) {
+      console.error('Lỗi khi cập nhật trạng thái phim:', err);
+      const status = err?.response?.status;
+      if (status === 403 || status === 401) {
+        addToast('Lỗi 403 (Access Denied): Tài khoản hiện tại không có quyền ADMIN!', 'error', 'Từ chối truy cập');
+      } else {
+        addToast('Cập nhật trạng thái thất bại', 'error');
+      }
     }
   };
 

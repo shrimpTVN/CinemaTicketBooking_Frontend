@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback, memo } from '
 import { createPortal } from 'react-dom';
 import { Minus, Plus } from 'lucide-react';
 import { useBookingStore } from '../../../store/bookingStore';
-import { fmtVND, isSeatDisabledForCount, getBlockModesForTicketCount, findBestValidCandidateBlock, getActiveBlockSize } from '../bookingUtils';
+import { isSeatDisabledForCount, getBlockModesForTicketCount, findBestValidCandidateBlock, getActiveBlockSize } from '../bookingUtils';
 import Toast from '../../../components/Toast';
 
 const CustomDropdown = memo(function CustomDropdown({ value, max, onChange }) {
@@ -321,7 +321,7 @@ const SeatCell = memo(function SeatCell({ seat, selected, previewSelected, isOrp
         <span style={textStyle}>{displayNumber}</span>
       </button>
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden md:group-hover:block bg-zinc-950/95 text-[10px] text-white px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap border border-white/10 pointer-events-none z-50">
-        {`Ghế ${id} - ${type === 'vip' ? 'VIP' : 'Thường'} - ${fmtVND(price)}`}
+        {`Ghế ${id} - ${type === 'vip' ? 'VIP' : 'Thường'}`}
       </div>
     </div>
   );

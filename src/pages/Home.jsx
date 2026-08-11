@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNowShowing, getComingSoon, updateSpecialList } from '../services/movieService';
 import { getAllEvents } from '../services/eventService';
@@ -83,8 +83,17 @@ export default function Home() {
 
   const activeMovies = (activeTab === 'now-showing' ? nowShowing : comingSoon).slice(0, 8);
 
-  // Lấy danh sách phim đề xuất từ "now-showing" (tối đa 4 phim)
-  const recommendedPool = nowShowing.slice(0, 4);
+  // Lấy danh sách phim đề xuất từ "now-showing" (CHỈ lấy các phim có điểm đánh giá rating > 0)
+  const recommendedPool = useMemo(() => {
+    if (!nowShowing || nowShowing.length === 0) return [];
+
+    // Chỉ lọc các phim thực sự đã có điểm đánh giá > 0 và sắp xếp giảm dần theo điểm rating
+    return nowShowing
+      .filter((m) => Number(m.rating) > 0)
+      .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
+      .slice(0, 4);
+  }, [nowShowing]);
+
   const activeRecommended = recommendedPool[recommendedIndex] || null;
 
   // Lấy các phim đề cử khác trong pool (trừ phim đang active) để hiển thị ở dưới
@@ -102,7 +111,7 @@ export default function Home() {
     if (!movie) return '';
     const mainGenre = movie.genre && movie.genre.length > 0 ? movie.genre[0] : '';
     const ratingNum = Number(movie.rating) || 0;
-    if (ratingNum >= 8.0) {
+    if (ratingNum > 0) {
       return `Dựa trên điểm số cao (${ratingNum}/10) & đánh giá tích cực từ khán giả`;
     }
     if (mainGenre) {

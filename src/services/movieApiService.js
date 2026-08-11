@@ -82,19 +82,25 @@ const denormalizeMovie = (movieData, allGenres = []) => {
 
   let status = movieData.status === 'OFF' ? 'OFF' : 'ON';
 
+  const posterUrl = (movieData.posterUrl || movieData.avatar || '').trim() || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba';
+  const trailerUrl = (movieData.trailerUrl || movieData.trailer || '').trim() || 'https://www.youtube.com';
+  const castStr = Array.isArray(movieData.cast) ? movieData.cast.join(', ') : (movieData.cast || movieData.actors || '');
+  const actors = castStr.trim() || 'Đang cập nhật';
+  const director = (movieData.director || '').trim() || 'Đang cập nhật';
+
   return {
     id: movieData.id ? Number(movieData.id) : undefined,
     title: movieData.title,
     duration: Number(movieData.duration),
-    avatar: movieData.posterUrl,
-    trailer: movieData.trailerUrl,
+    avatar: posterUrl,
+    trailer: trailerUrl,
     description: movieData.description || '',
     country: movieData.country || 'Việt Nam',
     ageLimit,
     premiereDate,
     rating: movieData.rating ? Number(movieData.rating) : 0.0,
-    actors: Array.isArray(movieData.cast) ? movieData.cast.join(', ') : (movieData.cast || ''),
-    director: movieData.director || '',
+    actors,
+    director,
     status,
     genres
   };
@@ -236,27 +242,30 @@ export const getRelatedMovies = async (movie) => {
   try {
     const res = await apiClient.get(`/movies/${movie.id}/related`);
     const movies = Array.isArray(res) ? res : res?.data || [];
-    return movies.map(normalizeMovie);
+    return movies
+      .map(normalizeMovie)
+      .filter(m =>
+        m.status !== 'stopped' &&
+        m.genre?.some(g => movie.genre?.includes(g))
+      )
+      .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
+      .slice(0, 3);
   } catch (error) {
     console.warn('Failed to fetch related movies from API, falling back to local filtering.', error);
 
     try {
       const res = await apiClient.get('/movies');
       const allMovies = Array.isArray(res) ? res : res?.data || [];
-      const normalizedMovies = allMovies.map(normalizeMovie);
+      const activeMovies = allMovies.map(normalizeMovie).filter(m => m.status !== 'stopped');
 
-      const related = normalizedMovies.filter(m =>
-        m.id !== movie.id &&
-        m.genre?.some(g => movie.genre?.includes(g))
-      ).slice(0, 3);
-
-      if (related.length < 3) {
-        const remaining = normalizedMovies.filter(m =>
+      const related = activeMovies
+        .filter(m =>
           m.id !== movie.id &&
-          !related.some(r => r.id === m.id)
-        );
-        return [...related, ...remaining].slice(0, 3);
-      }
+          m.genre?.some(g => movie.genre?.includes(g))
+        )
+        .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
+        .slice(0, 3);
+
       return related;
     } catch (fallbackError) {
       console.error('Related movies fallback error:', fallbackError);
@@ -293,7 +302,7 @@ export const createMovie = async (movieData) => {
     return normalizeMovie(res?.data || res);
   } catch (error) {
     console.error('createMovie API error:', error);
-    return null;
+    throw error;
   }
 };
 
@@ -306,12 +315,12 @@ export const createMovie = async (movieData) => {
 export const updateMovie = async (id, movieData) => {
   try {
     const allGenres = await getAllGenres();
-    const payload = denormalizeMovie(movieData, allGenres);
+    const payload = denormalizeMovie({ ...movieData, id }, allGenres);
     const res = await apiClient.patch(`/movies/${id}`, payload);
     return normalizeMovie(res?.data || res);
   } catch (error) {
     console.error(`updateMovie (${id}) API error:`, error);
-    return null;
+    throw error;
   }
 };
 

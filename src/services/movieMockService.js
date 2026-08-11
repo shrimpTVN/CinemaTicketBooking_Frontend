@@ -111,19 +111,17 @@ export const getRelatedMovies = async (movie) => {
   return new Promise((resolve) => {
     setTimeout(() => {
       if (!movie) return resolve([]);
-      const related = moviesStore.filter(m => 
-        m.id !== movie.id && 
-        m.genre?.some(g => movie.genre?.includes(g))
-      ).slice(0, 3);
-      if (related.length < 3) {
-        const remaining = moviesStore.filter(m => 
+      const activeMovies = moviesStore.filter(m => m.status !== 'stopped');
+
+      const related = activeMovies
+        .filter(m => 
           m.id !== movie.id && 
-          !related.some(r => r.id === m.id)
-        );
-        resolve([...related, ...remaining].slice(0, 3));
-      } else {
-        resolve(related);
-      }
+          m.genre?.some(g => movie.genre?.includes(g))
+        )
+        .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
+        .slice(0, 3);
+
+      resolve(related);
     }, 150);
   });
 };
