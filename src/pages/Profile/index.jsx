@@ -8,7 +8,7 @@ import Toast from '../../components/Toast';
 import { changePassword, updateProfile } from '../../services/authService';
 import { USE_MOCK } from '../../services/apiConfig';
 import apiClient from '../../services/apiClient';
-import { getNowShowing } from '../../services/movieService';
+import { getAllMovies } from '../../services/movieService';
 import ScrollReveal from '../../components/ScrollReveal';
 
 // Sub-components
@@ -118,7 +118,7 @@ export default function Profile() {
           console.error("Failed to fetch invoices from BE:", err);
         });
       
-      getNowShowing().then((data) => {
+      getAllMovies().then((data) => {
         setMoviesList(data);
       }).catch(err => console.error("Failed to load movies:", err));
     } else {
@@ -400,9 +400,9 @@ export default function Profile() {
     );
 
     const mappedDbTickets = paidInvoices.map((inv) => {
-      const movieObj = moviesList.find((m) => m.id === inv.showtime?.movieId);
-      const poster = movieObj?.posterUrl || '';
-      const ageRating = movieObj?.ageRating || 'P';
+      const movieObj = moviesList.find((m) => m.id === inv.showtime?.movieId || String(m.id) === String(inv.showtime?.movieId));
+      const poster = movieObj?.posterUrl || inv.showtime?.posterUrl || inv.showtime?.moviePoster || '';
+      const ageRating = movieObj?.ageRating || inv.showtime?.ageRating || 'P';
 
       const seatLabels = (inv.tickets || [])
         .map((t) => (t.seatRowLabel && t.seatColNumber ? `${t.seatRowLabel}${t.seatColNumber}` : t.displayName || t.id || ''))
