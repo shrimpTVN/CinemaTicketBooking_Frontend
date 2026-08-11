@@ -138,8 +138,9 @@ export default function AdminShowtimes() {
       });
     } else {
       setEditingShowtime(null);
+      const nowShowingMovie = movies.find(m => m.status === 'now-showing' || m.status === 'ON' || m.status === 'active') || movies[0];
       setForm({
-        movieId: movies[0]?.id || '',
+        movieId: nowShowingMovie?.id || '',
         hallId: halls[0]?.id || '',
         date: new Date().toISOString().split('T')[0],
         startTime: '09:00',
@@ -426,9 +427,16 @@ export default function AdminShowtimes() {
                   value={form.movieId}
                   onChange={(e) => setForm({ ...form, movieId: e.target.value })}
                 >
-                  {movies.map((m) => (
-                    <option key={m.id} value={m.id} style={{ background: '#1a1a1a' }}>{m.title}</option>
-                  ))}
+                  {movies
+                    .filter((m) => {
+                      if (editingShowtime && (m.id === editingShowtime.movieId || String(m.id) === String(editingShowtime.movieId))) {
+                        return true;
+                      }
+                      return m.status === 'now-showing' || m.status === 'ON' || m.status === 'active';
+                    })
+                    .map((m) => (
+                      <option key={m.id} value={m.id} style={{ background: '#1a1a1a' }}>{m.title}</option>
+                    ))}
                 </select>
                 {formErrors.movieId && <p className="text-red-400 text-xs mt-1 text-left">{formErrors.movieId}</p>}
               </div>
