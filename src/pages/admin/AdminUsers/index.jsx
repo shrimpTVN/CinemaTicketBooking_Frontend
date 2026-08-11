@@ -2,8 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search, Shield, CheckCircle, Lock, Users, UserCheck, UserX, ChevronDown } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
 
+const isUserActive = (status) => {
+  if (!status) return false;
+  const s = String(status).toUpperCase();
+  return s === 'ACTIVE' || s === 'ON' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
 function StatusBadge({ status }) {
-  const active = status === 'ACTIVE' || status === 'active';
+  const active = isUserActive(status);
   return active
     ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20"><CheckCircle className="w-3 h-3" />Hoạt động</span>
     : <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-rose-500/10 text-rose-400 border-rose-500/20"><Lock className="w-3 h-3" />Đã khóa</span>;
@@ -63,7 +69,7 @@ export default function AdminUsers() {
   }, [users, searchQuery, roleFilter]);
 
   const toggleStatus = async (user) => {
-    const newStatus = (user.status === 'ACTIVE' || user.status === 'active') ? 'INACTIVE' : 'ACTIVE';
+    const newStatus = isUserActive(user.status) ? 'INACTIVE' : 'ACTIVE';
     try {
       await apiClient.patch(`/users/${user.id}/update-status`, { status: newStatus });
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
@@ -76,7 +82,7 @@ export default function AdminUsers() {
     total: users.length,
     admins: users.filter(u => u.role === 'ROLE_ADMIN' || u.role === 'ADMIN').length,
     customers: users.filter(u => u.role !== 'ROLE_ADMIN' && u.role !== 'ADMIN').length,
-    blocked: users.filter(u => u.status !== 'ACTIVE' && u.status !== 'active').length,
+    blocked: users.filter(u => !isUserActive(u.status)).length,
   }), [users]);
 
   return (
@@ -193,12 +199,12 @@ export default function AdminUsers() {
                       <button
                         onClick={() => toggleStatus(u)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
-                          u.status === 'ACTIVE' || u.status === 'active'
+                          isUserActive(u.status)
                             ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
                             : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
                         }`}
                       >
-                        {(u.status === 'ACTIVE' || u.status === 'active') ? 'Khóa' : 'Mở khóa'}
+                        {isUserActive(u.status) ? 'Khóa' : 'Mở khóa'}
                       </button>
                     </td>
                   </tr>

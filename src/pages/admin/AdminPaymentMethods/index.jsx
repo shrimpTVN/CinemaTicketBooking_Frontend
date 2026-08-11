@@ -63,6 +63,12 @@ export default function AdminPaymentMethods() {
     );
   }, [items, search]);
 
+const isPaymentMethodActive = (status) => {
+  if (!status) return false;
+  const s = String(status).toUpperCase();
+  return s === 'ON' || s === 'ACTIVE' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setLogoError(false); setShowModal(true); };
   const openEdit   = (item) => {
     setEditing(item);
@@ -73,7 +79,7 @@ export default function AdminPaymentMethods() {
       description: item.description || '',
       logo: item.logo || '',
       surcharge: String(item.surcharge ?? '0'),
-      status: item.status || 'ON',
+      status: isPaymentMethodActive(item.status) ? 'ON' : 'OFF',
     });
     setShowModal(true);
   };
@@ -103,7 +109,8 @@ export default function AdminPaymentMethods() {
   };
 
   const toggleStatus = async (item) => {
-    const next = item.status === 'ON' ? 'OFF' : 'ON';
+    const isNowOn = isPaymentMethodActive(item.status);
+    const next = isNowOn ? 'OFF' : 'ON';
     try {
       await apiClient.patch(`/payment-methods/${item.id}`, { status: next });
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: next } : i));

@@ -94,17 +94,24 @@ export default function AdminHalls() {
     loadData();
   }, []);
 
+const isHallActive = (status) => {
+  if (!status) return true;
+  const s = String(status).toUpperCase();
+  return s === 'ON' || s === 'ACTIVE' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
   // Tính toán số liệu thống kê phòng chiếu
   const stats = useMemo(() => {
     const total = halls.length;
-    const active = halls.filter((h) => h.status !== 'OFF').length;
+    const active = halls.filter((h) => isHallActive(h.status)).length;
     const totalSeats = halls.reduce((sum, h) => sum + (h.width * h.height), 0);
     return { total, active, totalSeats };
   }, [halls]);
 
   // Bật/Tắt hoạt động phòng chiếu trực tiếp
   const handleToggleStatus = async (hall) => {
-    const nextStatus = hall.status === 'OFF' ? 'ON' : 'OFF';
+    const isNowOn = isHallActive(hall.status);
+    const nextStatus = isNowOn ? 'OFF' : 'ON';
     const matchedType = hallTypes.find(t => t.name === hall.hallType);
     const typeId = matchedType ? matchedType.id : 1;
 
@@ -657,11 +664,11 @@ export default function AdminHalls() {
                     <button
                       onClick={() => handleToggleStatus(hall)}
                       className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                      style={{ backgroundColor: hall.status !== 'OFF' ? '#10b981' : '#3f3f46' }}
+                      style={{ backgroundColor: isHallActive(hall.status) ? '#10b981' : '#3f3f46' }}
                     >
                       <span
                         className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                        style={{ transform: hall.status !== 'OFF' ? 'translateX(16px)' : 'translateX(0px)' }}
+                        style={{ transform: isHallActive(hall.status) ? 'translateX(16px)' : 'translateX(0px)' }}
                       />
                     </button>
                   </div>

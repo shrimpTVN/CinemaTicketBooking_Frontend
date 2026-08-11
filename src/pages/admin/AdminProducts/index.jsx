@@ -23,7 +23,13 @@ function Input({ label, ...props }) {
   );
 }
 
-const EMPTY_FORM = { name: '', price: '', productType: 'COMBO', description: '', image: '', status: 'ACTIVE' };
+const isProductActive = (status) => {
+  if (!status) return false;
+  const s = String(status).toUpperCase();
+  return s === 'ON' || s === 'ACTIVE' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
+const EMPTY_FORM = { name: '', price: '', productType: 'COMBO', description: '', image: '', status: 'ON' };
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
@@ -62,7 +68,14 @@ export default function AdminProducts() {
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowModal(true); };
   const openEdit = (p) => {
     setEditing(p);
-    setForm({ name: p.name || '', price: p.price || '', productType: p.productType || 'COMBO', description: p.description || '', image: p.image || '', status: p.status || 'ACTIVE' });
+    setForm({
+      name: p.name || '',
+      price: p.price || '',
+      productType: p.productType || 'COMBO',
+      description: p.description || '',
+      image: p.image || '',
+      status: isProductActive(p.status) ? 'ON' : 'OFF'
+    });
     setShowModal(true);
   };
 
@@ -88,7 +101,7 @@ export default function AdminProducts() {
   };
 
   const toggleStatus = async (p) => {
-    const newStatus = p.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const newStatus = isProductActive(p.status) ? 'OFF' : 'ON';
     try {
       await apiClient.post(`/products/${p.id}/update-status`, { status: newStatus });
       setProducts(prev => prev.map(x => x.id === p.id ? { ...x, status: newStatus } : x));
@@ -194,12 +207,13 @@ export default function AdminProducts() {
                       onClick={() => toggleStatus(p)}
                       className="p-1.5 rounded-lg cursor-pointer border transition-colors"
                       style={{
-                        background: p.status === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)',
-                        borderColor: p.status === 'ACTIVE' ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)',
-                        color: p.status === 'ACTIVE' ? '#10B981' : '#F43F5E',
+                        background: isProductActive(p.status) ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)',
+                        borderColor: isProductActive(p.status) ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)',
+                        color: isProductActive(p.status) ? '#10B981' : '#F43F5E',
                       }}
+                      title={isProductActive(p.status) ? 'Đang bán (Click để tạm ngừng)' : 'Tạm ngừng (Click để mở bán)'}
                     >
-                      {p.status === 'ACTIVE'
+                      {isProductActive(p.status)
                         ? <CheckCircle className="w-3.5 h-3.5" />
                         : <XCircle className="w-3.5 h-3.5" />}
                     </button>

@@ -3,6 +3,12 @@ import { getAllEvents, createEvent, updateEvent, updateEventStatus } from '../..
 import { uploadEventPoster, uploadEventBanner } from '../../../services/mediaService';
 import Toast from '../../../components/Toast';
 
+const isEventActive = (status) => {
+  if (!status) return false;
+  const s = String(status).toUpperCase();
+  return s === 'ACTIVE' || s === 'ON' || s === 'ENABLE' || s === '1' || s === 'TRUE';
+};
+
 export default function AdminEvents() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +57,8 @@ export default function AdminEvents() {
   // Thống kê số liệu
   const stats = useMemo(() => {
     const total = events.length;
-    const active = events.filter(e => e.status === 'ACTIVE').length;
-    const inactive = events.filter(e => e.status === 'INACTIVE').length;
+    const active = events.filter(e => isEventActive(e.status)).length;
+    const inactive = events.filter(e => !isEventActive(e.status)).length;
     return { total, active, inactive };
   }, [events]);
 
@@ -177,7 +183,8 @@ export default function AdminEvents() {
 
   // Bật/Tắt trạng thái sự kiện
   const handleToggleStatus = async (item) => {
-    const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const isNowActive = isEventActive(item.status);
+    const nextStatus = isNowActive ? 'INACTIVE' : 'ACTIVE';
     try {
       const res = await updateEventStatus(item.id, nextStatus);
       if (res !== null) {
@@ -321,9 +328,9 @@ export default function AdminEvents() {
                   </td>
                   <td className="py-4 px-6 text-center">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      item.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
+                      isEventActive(item.status) ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
                     }`}>
-                      {item.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm dừng'}
+                      {isEventActive(item.status) ? 'Hoạt động' : 'Tạm dừng'}
                     </span>
                   </td>
                   <td className="py-4 px-6 text-center">
@@ -342,12 +349,12 @@ export default function AdminEvents() {
                       <button
                         onClick={() => handleToggleStatus(item)}
                         className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                        style={{ backgroundColor: item.status === 'ACTIVE' ? '#10b981' : '#3f3f46' }}
-                        title={item.status === 'ACTIVE' ? 'Click để tạm ẩn' : 'Click để kích hoạt'}
+                        style={{ backgroundColor: isEventActive(item.status) ? '#10b981' : '#3f3f46' }}
+                        title={isEventActive(item.status) ? 'Click để tạm ẩn' : 'Click để kích hoạt'}
                       >
                         <span
                           className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                          style={{ transform: item.status === 'ACTIVE' ? 'translateX(16px)' : 'translateX(0px)' }}
+                          style={{ transform: isEventActive(item.status) ? 'translateX(16px)' : 'translateX(0px)' }}
                         />
                       </button>
                     </div>
