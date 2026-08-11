@@ -111,6 +111,8 @@ const denormalizeMovie = (movieData, allGenres = []) => {
   const actors = castStr.trim() || 'Đang cập nhật';
   const director = (movieData.director || '').trim() || 'Đang cập nhật';
 
+  const genreIds = genres.map(g => Number(g.id)).filter(Boolean);
+
   return {
     id: movieData.id ? Number(movieData.id) : undefined,
     title: String(movieData.title || '').trim(),
@@ -125,7 +127,8 @@ const denormalizeMovie = (movieData, allGenres = []) => {
     actors,
     director,
     status,
-    genres
+    genres,
+    genreIds
   };
 };
 
