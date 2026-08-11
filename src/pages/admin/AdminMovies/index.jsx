@@ -74,7 +74,8 @@ export default function AdminMovies() {
   };
 
   const handleToggleStatus = async (movie) => {
-    const targetStatus = movie.status === 'stopped' ? 'ON' : 'OFF';
+    const isStopped = movie.status === 'stopped' || movie.status === 'OFF';
+    const targetStatus = isStopped ? 'ON' : 'OFF';
     const payload = {
       title: movie.title,
       description: movie.description,

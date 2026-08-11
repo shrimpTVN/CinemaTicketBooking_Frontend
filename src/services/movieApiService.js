@@ -44,13 +44,25 @@ export const getAllGenres = async () => {
 const denormalizeMovie = (movieData, allGenres = []) => {
   const lookupGenres = allGenres.length > 0 ? allGenres : FALLBACK_GENRES;
 
-  const genres = (movieData.genre || []).map(name => {
-    const normalizedName = name.toLowerCase().replace(/\s+/g, '');
-    const matched = lookupGenres.find(g => g.name.toLowerCase().replace(/\s+/g, '') === normalizedName);
+  const inputGenres = Array.isArray(movieData.genre)
+    ? movieData.genre
+    : Array.isArray(movieData.genres)
+    ? movieData.genres
+    : (movieData.genre ? [movieData.genre] : []);
+
+  const genres = inputGenres.map(g => {
+    if (typeof g === 'object' && g.id) {
+      return { id: g.id, name: g.name || '', description: g.description || '' };
+    }
+    const gName = String(g).trim();
+    const normalizedName = gName.toLowerCase().replace(/\s+/g, '');
+    const matched = lookupGenres.find(
+      (ag) => (ag.name || '').toLowerCase().replace(/\s+/g, '') === normalizedName
+    );
     if (matched) {
       return { id: matched.id, name: matched.name, description: matched.description || '' };
     }
-    return null;
+    return lookupGenres[0] ? { id: lookupGenres[0].id, name: gName, description: `Thể loại ${gName}` } : null;
   }).filter(Boolean);
 
   let ageLimit = 0;
@@ -58,7 +70,7 @@ const denormalizeMovie = (movieData, allGenres = []) => {
     if (movieData.ageRating === 'C' || movieData.ageRating === 'T18') {
       ageLimit = 18;
     } else {
-      const match = movieData.ageRating.match(/\d+/);
+      const match = String(movieData.ageRating).match(/\d+/);
       if (match) {
         ageLimit = parseInt(match[0], 10);
       }
@@ -66,9 +78,16 @@ const denormalizeMovie = (movieData, allGenres = []) => {
   }
 
   let premiereDate = null;
-  if (movieData.releaseDate) {
+  const rawDate = movieData.premiereDate || movieData.releaseDate || movieData.premiere_date;
+  if (rawDate) {
     try {
-      const dateVal = new Date(movieData.releaseDate);
+      let dateVal = new Date(rawDate);
+      if (isNaN(dateVal.getTime()) && typeof rawDate === 'string') {
+        const parts = rawDate.split('/');
+        if (parts.length === 3) {
+          dateVal = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+        }
+      }
       if (!isNaN(dateVal.getTime())) {
         premiereDate = dateVal.toISOString();
       }
@@ -80,7 +99,11 @@ const denormalizeMovie = (movieData, allGenres = []) => {
     premiereDate = new Date().toISOString();
   }
 
-  let status = movieData.status === 'OFF' ? 'OFF' : 'ON';
+  let status = 'ON';
+  const rawStatus = String(movieData.status || '').toUpperCase();
+  if (rawStatus === 'OFF' || rawStatus === 'STOPPED' || rawStatus === 'INACTIVE') {
+    status = 'OFF';
+  }
 
   const posterUrl = (movieData.posterUrl || movieData.avatar || '').trim() || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba';
   const trailerUrl = (movieData.trailerUrl || movieData.trailer || '').trim() || 'https://www.youtube.com';
@@ -90,15 +113,15 @@ const denormalizeMovie = (movieData, allGenres = []) => {
 
   return {
     id: movieData.id ? Number(movieData.id) : undefined,
-    title: movieData.title,
-    duration: Number(movieData.duration),
+    title: String(movieData.title || '').trim(),
+    duration: Number(movieData.duration) || 120,
     avatar: posterUrl,
     trailer: trailerUrl,
     description: movieData.description || '',
-    country: movieData.country || 'Việt Nam',
+    country: (movieData.country || '').trim() || 'Việt Nam',
     ageLimit,
     premiereDate,
-    rating: movieData.rating ? Number(movieData.rating) : 0.0,
+    rating: movieData.rating !== undefined && movieData.rating !== null ? Number(movieData.rating) : 0.0,
     actors,
     director,
     status,
